@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ranking Prode 2026</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="ranking">
+  <header class="hero compact-hero">
+    <nav class="top-nav" aria-label="Navegación principal">
+      <a class="nav-link" href="index.html">Cargar prode</a>
+      <a class="nav-link active" href="ranking.html">Ver ranking</a>
+    </nav>
+    <div class="hero-content">
+      <p class="eyebrow">Tabla general</p>
+      <h1>Ranking Prode 2026</h1>
+      <p>El puntaje se recalcula con las predicciones y los resultados oficiales cargados.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="section-heading">
+        <h2>Posiciones</h2>
+        <button id="refreshRanking" type="button" class="secondary-button">Actualizar</button>
+      </div>
+      <div id="rankingNotice" class="notice"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Posición</th>
+              <th>Nombre y Apellido</th>
+              <th>Puntos</th>
+              <th>Exactos</th>
+              <th>Signos acertados</th>
+              <th>Total de aciertos</th>
+            </tr>
+          </thead>
+          <tbody id="rankingBody"></tbody>
+        </table>
+      </div>
+    </section>
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="data.js"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
