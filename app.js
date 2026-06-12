@@ -5,6 +5,8 @@ const ADMIN_PASSWORD = "CAMBIAR_PASSWORD_ADMIN";
 const page = document.body.dataset.page;
 const messageBox = document.getElementById("message");
 let currentPredictions = [];
+let closedMatchIds = new Set();
+let closedMatchesLoadPromise = Promise.resolve();
 
 function normalizeName(name) {
   return name.trim().replace(/\s+/g, " ");
@@ -28,7 +30,8 @@ function assertSupabaseConfig() {
 
 function renderTeam(teamName) {
   const team = TEAMS[teamName] || { name: teamName, flag: "" };
-  return `<span class="team"><span class="flag" aria-hidden="true">${team.flag}</span><span>${team.name}</span></span>`;
+  const flag = team.flag ? `<span class="flag" aria-hidden="true">${team.flag}</span> ` : "";
+  return `<span class="team">${flag}<span>${team.name}</span></span>`;
 }
 
 function renderMatchesForm() {
@@ -48,11 +51,43 @@ function renderMatchesForm() {
             <span class="versus">vs</span>
             <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles ${match.team2}" data-goals="2" data-match-id="${match.id}">
             <div class="match-team right-team">${renderTeam(match.team2)}</div>
+            <span class="closed-badge hidden">Cerrado</span>
           </article>
         `).join("")}
       </div>
     </section>
   `).join("");
+}
+
+function applyClosedMatches() {
+  MATCHES.forEach(match => {
+    const row = document.querySelector(`.match-row[data-match-id="${match.id}"]`);
+    if (!row) return;
+
+    const isClosed = closedMatchIds.has(match.id);
+    row.classList.toggle("closed-match", isClosed);
+    row.querySelectorAll(".goal-input").forEach(input => {
+      input.disabled = isClosed;
+      if (isClosed) {
+        input.value = "";
+        input.classList.remove("input-error");
+      }
+    });
+
+    const badge = row.querySelector(".closed-badge");
+    badge?.classList.toggle("hidden", !isClosed);
+  });
+}
+
+async function loadClosedMatches() {
+  assertSupabaseConfig();
+  const { data, error } = await supabaseClient
+    .from("official_results")
+    .select("match_id");
+
+  if (error) throw error;
+  closedMatchIds = new Set(data.map(result => result.match_id));
+  applyClosedMatches();
 }
 
 function readPredictionsFromForm() {
@@ -62,6 +97,13 @@ function readPredictionsFromForm() {
   MATCHES.forEach(match => {
     const goals1Input = document.querySelector(`input[data-match-id="${match.id}"][data-goals="1"]`);
     const goals2Input = document.querySelector(`input[data-match-id="${match.id}"][data-goals="2"]`);
+
+    if (closedMatchIds.has(match.id)) {
+      goals1Input?.classList.remove("input-error");
+      goals2Input?.classList.remove("input-error");
+      return;
+    }
+
     const rawGoals1 = goals1Input?.value ?? "";
     const rawGoals2 = goals2Input?.value ?? "";
 
@@ -154,8 +196,10 @@ async function savePredictions() {
       goals2: prediction.goals2
     }));
 
-    const { error: predictionsError } = await supabaseClient.from("predictions").insert(rows);
-    if (predictionsError) throw predictionsError;
+    if (rows.length > 0) {
+      const { error: predictionsError } = await supabaseClient.from("predictions").insert(rows);
+      if (predictionsError) throw predictionsError;
+    }
 
     document.getElementById("predictionForm").reset();
     document.getElementById("summarySection").classList.add("hidden");
@@ -169,6 +213,9 @@ async function savePredictions() {
 
 function initIndexPage() {
   renderMatchesForm();
+  closedMatchesLoadPromise = loadClosedMatches().catch(error => {
+    showMessage(error.message || "No se pudieron consultar los partidos cerrados.", "error");
+  });
   const form = document.getElementById("predictionForm");
   const editButton = document.getElementById("editButton");
   const confirmButton = document.getElementById("confirmButton");
@@ -186,9 +233,12 @@ function initIndexPage() {
       return;
     }
 
+    await closedMatchesLoadPromise;
+
     const { predictions, errors } = readPredictionsFromForm();
-    if (errors.length > 0 || predictions.length !== MATCHES.length) {
-      showMessage("No se puede guardar si falta completar algún partido o hay goles inválidos.", "error");
+    const openMatchesCount = MATCHES.length - closedMatchIds.size;
+    if (errors.length > 0 || predictions.length !== openMatchesCount) {
+      showMessage("No se puede guardar si falta completar algún partido abierto o hay goles inválidos.", "error");
       return;
     }
 
