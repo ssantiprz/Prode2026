@@ -6,7 +6,6 @@ const page = document.body.dataset.page;
 const messageBox = document.getElementById("message");
 let currentPredictions = [];
 
-
 function normalizeName(name) {
   return name.trim().replace(/\s+/g, " ");
 }
@@ -29,8 +28,7 @@ function assertSupabaseConfig() {
 
 function renderTeam(teamName) {
   const team = TEAMS[teamName] || { name: teamName, flag: "" };
-  const flag = team.flag ? `<span class="flag" aria-hidden="true">${team.flag}</span> ` : "";
-  return `<span class="team">${flag}<span>${team.name}</span></span>`;
+  return `<span class="team"><span class="flag" aria-hidden="true">${team.flag}</span><span>${team.name}</span></span>`;
 }
 
 function renderMatchesForm() {
