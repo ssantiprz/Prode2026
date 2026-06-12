@@ -28,6 +28,20 @@
     </section>
 
     <section id="adminPanel" class="hidden">
+      <!-- Sección admin para exportar pronósticos de participantes a PDF. -->
+      <section class="card export-card">
+        <h2>Exportar pronósticos por participante</h2>
+        <p>Seleccioná un participante registrado para descargar un PDF con todos sus pronósticos.</p>
+        <div class="export-controls">
+          <label for="participantSelect">Participante</label>
+          <select id="participantSelect">
+            <option value="">Cargando participantes...</option>
+          </select>
+          <button id="exportPdfButton" type="button" class="secondary-button">Exportar PDF</button>
+        </div>
+        <div id="pdfExportMessage" class="admin-message" role="status" aria-live="polite"></div>
+      </section>
+
       <section class="card warning-card">
         <h2>Resultados oficiales</h2>
         <p>Podés guardar resultados parciales y volver a modificarlos más adelante. Completá ambos goles de cada partido que quieras actualizar.</p>
@@ -44,6 +58,8 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="data.js"></script>
   <script src="supabase.js"></script>
   <script src="app.js"></script>

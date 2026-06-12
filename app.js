@@ -387,11 +387,176 @@ function readAdminResults() {
   return rows;
 }
 
+
+// Exportación PDF de pronósticos desde el panel admin.
+function showPdfExportMessage(text, type = "info") {
+  const box = document.getElementById("pdfExportMessage");
+  if (!box) return;
+  box.textContent = text;
+  box.className = `admin-message ${type} ${text ? "visible" : ""}`;
+}
+
+function normalizePdfFileName(fullName) {
+  const normalizedName = fullName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `prode-2026-${normalizedName || "participante"}.pdf`;
+}
+
+async function loadParticipantsForExport() {
+  const select = document.getElementById("participantSelect");
+  const exportButton = document.getElementById("exportPdfButton");
+  if (!select || !exportButton) return;
+
+  select.innerHTML = `<option value="">Cargando participantes...</option>`;
+  select.disabled = true;
+  exportButton.disabled = true;
+  showPdfExportMessage("Cargando participantes...", "info");
+
+  const { data, error } = await supabaseClient
+    .from("participants")
+    .select("id, full_name")
+    .order("full_name", { ascending: true });
+
+  if (error) throw error;
+
+  const participants = data || [];
+  select.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = participants.length ? "Seleccioná un participante" : "Sin participantes";
+  select.appendChild(placeholder);
+
+  participants.forEach(participant => {
+    const option = document.createElement("option");
+    option.value = participant.id;
+    option.textContent = participant.full_name;
+    select.appendChild(option);
+  });
+
+  if (participants.length === 0) {
+    showPdfExportMessage("Todavía no hay participantes registrados.", "error");
+    return;
+  }
+
+  select.disabled = false;
+  exportButton.disabled = false;
+  showPdfExportMessage("Participantes cargados correctamente.", "success");
+}
+
+async function getParticipantPredictionsForPdf(participantId) {
+  const [{ data: participant, error: participantError }, { data: predictions, error: predictionsError }, { data: matches, error: matchesError }] = await Promise.all([
+    supabaseClient.from("participants").select("id, full_name").eq("id", participantId).single(),
+    supabaseClient.from("predictions").select("match_id, goals1, goals2").eq("participant_id", participantId),
+    supabaseClient.from("matches").select("id, group_name, team1, team2")
+  ]);
+
+  if (participantError) throw participantError;
+  if (predictionsError) throw predictionsError;
+  if (matchesError) throw matchesError;
+
+  const matchesById = new Map((matches || []).map(match => [match.id, match]));
+  const rows = (predictions || [])
+    .map(prediction => ({ ...prediction, match: matchesById.get(prediction.match_id) }))
+    .filter(row => row.match)
+    .sort((a, b) => a.match.group_name.localeCompare(b.match.group_name) || a.match.id - b.match.id);
+
+  return { participant, rows };
+}
+
+function generatePredictionsPdf(participant, rows) {
+  const jsPdfConstructor = window.jspdf?.jsPDF;
+  if (!jsPdfConstructor) {
+    throw new Error("No se pudo cargar jsPDF para generar el PDF.");
+  }
+
+  const doc = new jsPdfConstructor({ orientation: "landscape", unit: "mm", format: "a4" });
+  if (typeof doc.autoTable !== "function") {
+    throw new Error("No se pudo cargar jsPDF autoTable para generar la tabla del PDF.");
+  }
+
+  const exportedAt = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+  const tableBody = rows.map(row => [
+    row.match.group_name,
+    `#${row.match.id}`,
+    row.match.team1,
+    row.goals1,
+    row.goals2,
+    row.match.team2,
+    getResultSign(row.goals1, row.goals2)
+  ]);
+
+  doc.setFontSize(20);
+  doc.text("Prode 2026", 14, 18);
+  doc.setFontSize(13);
+  doc.text("Pronósticos registrados", 14, 26);
+  doc.setFontSize(10);
+  doc.text(`Participante: ${participant.full_name}`, 14, 34);
+  doc.text(`Fecha de exportación: ${exportedAt}`, 14, 40);
+
+  doc.autoTable({
+    startY: 48,
+    head: [["Grupo", "Partido", "Equipo 1", "Goles 1", "Goles 2", "Equipo 2", "Signo"]],
+    body: tableBody,
+    styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak" },
+    headStyles: { fillColor: [18, 70, 160], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [248, 251, 255] },
+    columnStyles: {
+      0: { cellWidth: 24 },
+      1: { cellWidth: 18 },
+      2: { cellWidth: 62 },
+      3: { cellWidth: 20, halign: "center" },
+      4: { cellWidth: 20, halign: "center" },
+      5: { cellWidth: 62 },
+      6: { cellWidth: 18, halign: "center" }
+    },
+    margin: { left: 14, right: 14 }
+  });
+
+  doc.save(normalizePdfFileName(participant.full_name));
+}
+
+async function exportSelectedParticipantPdf() {
+  const select = document.getElementById("participantSelect");
+  const exportButton = document.getElementById("exportPdfButton");
+  const participantId = select?.value;
+
+  if (!participantId) {
+    showPdfExportMessage("Seleccioná un participante para exportar.", "error");
+    return;
+  }
+
+  exportButton.disabled = true;
+  showPdfExportMessage("Generando PDF...", "info");
+
+  try {
+    assertSupabaseConfig();
+    const { participant, rows } = await getParticipantPredictionsForPdf(participantId);
+    if (rows.length === 0) {
+      showPdfExportMessage("Este participante no tiene pronósticos registrados.", "error");
+      return;
+    }
+
+    generatePredictionsPdf(participant, rows);
+    showPdfExportMessage("PDF exportado correctamente.", "success");
+  } catch (error) {
+    showPdfExportMessage(error.message || "No se pudo exportar el PDF.", "error");
+  } finally {
+    exportButton.disabled = false;
+  }
+}
+
 function initAdminPage() {
   renderAdminMatches();
   const loginButton = document.getElementById("loginButton");
   const passwordInput = document.getElementById("adminPassword");
   const resultsForm = document.getElementById("resultsForm");
+  const exportPdfButton = document.getElementById("exportPdfButton");
 
   loginButton.addEventListener("click", async () => {
     if (passwordInput.value !== ADMIN_PASSWORD) {
@@ -407,7 +572,15 @@ function initAdminPage() {
     } catch (error) {
       showMessage(error.message || "No se pudieron cargar los resultados.", "error");
     }
+
+    try {
+      await loadParticipantsForExport();
+    } catch (error) {
+      showPdfExportMessage(error.message || "No se pudieron cargar los participantes.", "error");
+    }
   });
+
+  exportPdfButton.addEventListener("click", exportSelectedParticipantPdf);
 
   resultsForm.addEventListener("submit", async event => {
     event.preventDefault();
