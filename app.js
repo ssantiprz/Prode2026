@@ -1,6 +1,6 @@
 // Esta contraseña no es seguridad real: solo funciona como barrera interna en el frontend.
 // En producción, el panel admin debería protegerse con autenticación real y políticas RLS estrictas.
-const ADMIN_PASSWORD = "CAMBIAR_PASSWORD_ADMIN";
+const ADMIN_PASSWORD = "Prode_2026$";
 
 const page = document.body.dataset.page;
 const messageBox = document.getElementById("message");
