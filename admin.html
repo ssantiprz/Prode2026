@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Prode 2026</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="admin">
+  <header class="hero compact-hero admin-hero">
+    <nav class="top-nav" aria-label="Navegación principal">
+      <a class="nav-link" href="index.html">Cargar prode</a>
+      <a class="nav-link" href="ranking.html">Ver ranking</a>
+    </nav>
+    <div class="hero-content">
+      <p class="eyebrow">Panel interno</p>
+      <h1>Admin Prode 2026</h1>
+      <p>Cargá o modificá los resultados oficiales de la fase de grupos.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="loginPanel" class="card narrow-card">
+      <h2>Acceso admin</h2>
+      <label for="adminPassword">Contraseña</label>
+      <input id="adminPassword" type="password" autocomplete="current-password" placeholder="Ingresá la contraseña">
+      <button id="loginButton" type="button" class="primary-button full-width">Ingresar</button>
+    </section>
+
+    <section id="adminPanel" class="hidden">
+      <!-- Sección admin para exportar pronósticos de participantes a PDF. -->
+      <section class="card export-card">
+        <h2>Exportar pronósticos por participante</h2>
+        <p>Seleccioná un participante registrado para descargar un PDF con todos sus pronósticos.</p>
+        <div class="export-controls">
+          <label for="participantSelect">Participante</label>
+          <select id="participantSelect">
+            <option value="">Cargando participantes...</option>
+          </select>
+          <button id="exportPdfButton" type="button" class="secondary-button">Exportar PDF</button>
+        </div>
+        <div id="pdfExportMessage" class="admin-message" role="status" aria-live="polite"></div>
+      </section>
+
+      <section class="card warning-card">
+        <h2>Resultados oficiales</h2>
+        <p>Podés guardar resultados parciales y volver a modificarlos más adelante. Completá ambos goles de cada partido que quieras actualizar.</p>
+      </section>
+
+      <div class="admin-tabs" role="tablist" aria-label="Estado de partidos oficiales">
+        <button id="openMatchesTab" type="button" class="admin-tab active" data-admin-tab="open" role="tab" aria-selected="true" aria-controls="openMatchesPanel">A completar (0)</button>
+        <button id="closedMatchesTab" type="button" class="admin-tab" data-admin-tab="closed" role="tab" aria-selected="false" aria-controls="closedMatchesPanel">Cerrados (0)</button>
+      </div>
+
+      <section id="openMatchesPanel" class="admin-tab-panel" role="tabpanel" aria-labelledby="openMatchesTab">
+        <form id="resultsForm" novalidate>
+          <div id="resultsContainer" class="admin-list"></div>
+          <div class="actions sticky-actions">
+            <button type="submit" class="primary-button">Guardar resultados</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="closedMatchesPanel" class="admin-tab-panel hidden" role="tabpanel" aria-labelledby="closedMatchesTab">
+        <div id="closedResultsContainer" class="admin-list"></div>
+      </section>
+    </section>
+
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="data.js"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
