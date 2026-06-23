@@ -226,10 +226,118 @@ button:disabled { opacity: 0.65; cursor: wait; }
 
 .section-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: center; flex-wrap: wrap; }
 .table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; min-width: 720px; }
+table { width: 100%; border-collapse: collapse; min-width: 820px; }
 th, td { padding: 0.85rem; text-align: left; border-bottom: 1px solid var(--line); }
 th { color: white; background: var(--blue); }
 tbody tr:nth-child(even) { background: #f8fbff; }
+
+.podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: end;
+  margin: 1rem 0 1.5rem;
+}
+.podium-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  background: linear-gradient(180deg, #ffffff, #f7fbff);
+  box-shadow: 0 16px 36px rgba(20, 33, 61, 0.12);
+  text-align: center;
+}
+.podium-1 {
+  order: 2;
+  transform: translateY(-0.6rem);
+  border-color: #ffd166;
+  background: linear-gradient(180deg, #fff8dc, #ffffff);
+}
+.podium-2 { order: 1; }
+.podium-3 { order: 3; }
+.podium-medal { font-size: 2rem; }
+.podium-position { color: var(--muted); font-weight: 900; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.08em; }
+.podium-card h3 { margin: 0; }
+.podium-card > strong { font-size: 1.5rem; color: var(--green-dark); }
+.podium-stats { display: flex; justify-content: center; gap: 0.75rem; flex-wrap: wrap; color: var(--muted); font-weight: 800; }
+.detail-button {
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  color: var(--blue);
+  background: #eaf1ff;
+  box-shadow: none;
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(20, 33, 61, 0.62);
+}
+.modal-content {
+  position: relative;
+  width: min(900px, 100%);
+  max-height: 86vh;
+  overflow: auto;
+  padding: 1.25rem;
+  border-radius: 1.25rem;
+  background: white;
+  box-shadow: var(--shadow);
+}
+.modal-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: auto;
+  padding: 0.35rem 0.75rem;
+  color: var(--ink);
+  background: #edf2f7;
+  box-shadow: none;
+  font-size: 1.4rem;
+}
+.detail-list { display: grid; gap: 0.75rem; }
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-left-width: 6px;
+  border-radius: 0.9rem;
+  background: #fbfdff;
+}
+.detail-item div { display: grid; gap: 0.2rem; }
+.detail-item small { color: var(--muted); }
+.detail-item.exact { border-left-color: var(--green); }
+.detail-item.sign { border-left-color: var(--gold); }
+.detail-item.miss { border-left-color: var(--red); }
+.detail-points { white-space: nowrap; }
+.empty-detail { margin: 0; color: var(--muted); font-weight: 800; }
+.locked-result {
+  border-color: #ffd98a;
+  background: #fffaf0;
+}
+.admin-closed-badge {
+  position: static;
+  display: inline-block;
+  margin-left: 0.5rem;
+}
+.lock-control {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.lock-control input { width: auto; }
+.locked-result .goal-input:disabled,
+.locked-result .lock-control input:disabled {
+  cursor: not-allowed;
+}
 
 .export-card p { margin-top: 0; color: var(--muted); }
 .export-controls {
@@ -447,6 +555,24 @@ tbody tr:nth-child(even) { background: #f8fbff; }
   td:nth-child(4)::before { content: "Exactos:"; font-weight: 800; color: var(--muted); }
   td:nth-child(5)::before { content: "Signos:"; font-weight: 800; color: var(--muted); }
   td:nth-child(6)::before { content: "Aciertos:"; font-weight: 800; color: var(--muted); }
+  td:nth-child(7)::before { content: "Detalle:"; font-weight: 800; color: var(--muted); }
+
+  .podium {
+    grid-template-columns: 1fr;
+  }
+
+  .podium-card {
+    order: initial;
+    transform: none;
+  }
+
+  .detail-item {
+    display: grid;
+  }
+
+  .detail-points {
+    white-space: normal;
+  }
 
   .export-controls {
     grid-template-columns: 1fr;

@@ -26,6 +26,7 @@
         <button id="refreshRanking" type="button" class="secondary-button">Actualizar</button>
       </div>
       <div id="rankingNotice" class="notice"></div>
+      <div id="podium" class="podium" aria-live="polite"></div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -36,6 +37,7 @@
               <th>Exactos</th>
               <th>Signos acertados</th>
               <th>Total de aciertos</th>
+              <th>Detalle</th>
             </tr>
           </thead>
           <tbody id="rankingBody"></tbody>
@@ -43,6 +45,14 @@
       </div>
     </section>
     <div id="message" class="message" role="status" aria-live="polite"></div>
+
+    <section id="rankingDetailModal" class="modal hidden" aria-modal="true" role="dialog" aria-labelledby="rankingDetailTitle">
+      <div class="modal-content">
+        <button id="closeDetailButton" type="button" class="modal-close" aria-label="Cerrar detalle">×</button>
+        <h2 id="rankingDetailTitle">Detalle de pronósticos</h2>
+        <div id="rankingDetailContent" class="detail-list"></div>
+      </div>
+    </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

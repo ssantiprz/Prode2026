@@ -34,8 +34,12 @@ create table if not exists official_results (
   match_id integer primary key references matches(id) on delete cascade,
   goals1 integer not null check (goals1 >= 0),
   goals2 integer not null check (goals2 >= 0),
+  is_locked boolean default false,
   updated_at timestamptz default now()
 );
+
+-- Migración para proyectos Supabase ya creados antes del bloqueo de partidos.
+alter table official_results add column if not exists is_locked boolean default false;
 
 insert into matches (id, group_name, team1, team2) values
   (1, 'Grupo A', 'México', 'Sudáfrica'),

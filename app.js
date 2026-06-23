@@ -1,12 +1,13 @@
 // Esta contraseña no es seguridad real: solo funciona como barrera interna en el frontend.
 // En producción, el panel admin debería protegerse con autenticación real y políticas RLS estrictas.
-const ADMIN_PASSWORD = "PRODE2026";
+const ADMIN_PASSWORD = "CAMBIAR_PASSWORD_ADMIN";
 
 const page = document.body.dataset.page;
 const messageBox = document.getElementById("message");
 let currentPredictions = [];
 let closedMatchIds = new Set();
 let closedMatchesLoadPromise = Promise.resolve();
+let rankingDetailsByParticipant = new Map();
 
 function normalizeName(name) {
   return name.trim().replace(/\s+/g, " ");
@@ -83,10 +84,11 @@ async function loadClosedMatches() {
   assertSupabaseConfig();
   const { data, error } = await supabaseClient
     .from("official_results")
-    .select("match_id");
+    .select("match_id, is_locked")
+    .eq("is_locked", true);
 
   if (error) throw error;
-  closedMatchIds = new Set(data.map(result => result.match_id));
+  closedMatchIds = new Set((data || []).map(result => result.match_id));
   applyClosedMatches();
 }
 
@@ -274,10 +276,88 @@ function scorePrediction(prediction, result) {
   return { points: 0, exact: 0, sign: 0 };
 }
 
+
+function renderPodium(ranking) {
+  const podium = document.getElementById("podium");
+  if (!podium) return;
+
+  const topThree = ranking.slice(0, 3);
+  if (topThree.length === 0) {
+    podium.innerHTML = "";
+    return;
+  }
+
+  const medals = ["🥇", "🥈", "🥉"];
+  podium.innerHTML = topThree.map((participant, index) => `
+    <article class="podium-card podium-${index + 1}">
+      <div class="podium-medal">${medals[index]}</div>
+      <div class="podium-position">${index + 1}° puesto</div>
+      <h3>${participant.full_name}</h3>
+      <strong>${participant.points} pts</strong>
+      <div class="podium-stats">
+        <span>Exactos: ${participant.exacts}</span>
+        <span>Signos: ${participant.signs}</span>
+      </div>
+      <button type="button" class="detail-button" data-participant-id="${participant.id}">Ver detalle</button>
+    </article>
+  `).join("");
+  bindRankingDetailButtons(podium);
+}
+
+function getDetailResultClass(score) {
+  if (score.points === 3) return { className: "exact", label: "Exacto +3" };
+  if (score.points === 1) return { className: "sign", label: "Signo +1" };
+  return { className: "miss", label: "No acertado 0" };
+}
+
+function openRankingDetail(participantId) {
+  const modal = document.getElementById("rankingDetailModal");
+  const title = document.getElementById("rankingDetailTitle");
+  const content = document.getElementById("rankingDetailContent");
+  if (!modal || !title || !content) return;
+
+  const details = rankingDetailsByParticipant.get(participantId) || [];
+  const participantName = document.querySelector(`.detail-button[data-participant-id="${participantId}"]`)?.closest("tr")?.children[1]?.textContent
+    || document.querySelector(`.detail-button[data-participant-id="${participantId}"]`)?.closest(".podium-card")?.querySelector("h3")?.textContent
+    || "Participante";
+
+  title.textContent = `Detalle de ${participantName}`;
+
+  if (details.length === 0) {
+    content.innerHTML = `<p class="empty-detail">Todavía no hay partidos con resultado oficial para este participante.</p>`;
+  } else {
+    content.innerHTML = details.map(({ match, prediction, result, score }) => {
+      const status = getDetailResultClass(score);
+      return `
+        <article class="detail-item ${status.className}">
+          <div>
+            <strong>#${match.id} · ${match.group}</strong>
+            <span>${getTeamLabel(match.team1)} ${prediction.goals1} - ${prediction.goals2} ${getTeamLabel(match.team2)}</span>
+            <small>Oficial: ${getTeamLabel(match.team1)} ${result.goals1} - ${result.goals2} ${getTeamLabel(match.team2)}</small>
+          </div>
+          <strong class="detail-points">${status.label}</strong>
+        </article>
+      `;
+    }).join("");
+  }
+
+  modal.classList.remove("hidden");
+}
+
+function closeRankingDetail() {
+  document.getElementById("rankingDetailModal")?.classList.add("hidden");
+}
+
+function bindRankingDetailButtons(scope = document) {
+  scope.querySelectorAll(".detail-button").forEach(button => {
+    button.addEventListener("click", () => openRankingDetail(button.dataset.participantId));
+  });
+}
+
 async function loadRanking() {
   const rankingBody = document.getElementById("rankingBody");
   const rankingNotice = document.getElementById("rankingNotice");
-  rankingBody.innerHTML = `<tr><td colspan="6">Cargando ranking...</td></tr>`;
+  rankingBody.innerHTML = `<tr><td colspan="7">Cargando ranking...</td></tr>`;
   rankingNotice.textContent = "";
 
   try {
@@ -285,32 +365,49 @@ async function loadRanking() {
     const [{ data: participants, error: participantsError }, { data: predictions, error: predictionsError }, { data: results, error: resultsError }] = await Promise.all([
       supabaseClient.from("participants").select("id, full_name, created_at"),
       supabaseClient.from("predictions").select("participant_id, match_id, goals1, goals2"),
-      supabaseClient.from("official_results").select("match_id, goals1, goals2")
+      supabaseClient.from("official_results").select("match_id, goals1, goals2, is_locked")
     ]);
 
     if (participantsError) throw participantsError;
     if (predictionsError) throw predictionsError;
     if (resultsError) throw resultsError;
 
-    const resultsByMatch = new Map(results.map(result => [result.match_id, result]));
-    const ranking = participants.map(participant => {
-      const participantPredictions = predictions.filter(prediction => prediction.participant_id === participant.id);
-      return participantPredictions.reduce((stats, prediction) => {
-        const score = scorePrediction(prediction, resultsByMatch.get(prediction.match_id));
-        stats.points += score.points;
-        stats.exacts += score.exact;
-        stats.signs += score.sign && !score.exact ? 1 : 0;
-        stats.totalHits += score.sign;
-        return stats;
-      }, { ...participant, points: 0, exacts: 0, signs: 0, totalHits: 0 });
+    const officialResults = results || [];
+    const allParticipants = participants || [];
+    const allPredictions = predictions || [];
+    const resultsByMatch = new Map(officialResults.map(result => [result.match_id, result]));
+    rankingDetailsByParticipant = new Map();
+    const ranking = allParticipants.map(participant => {
+      const participantPredictions = allPredictions.filter(prediction => prediction.participant_id === participant.id);
+      const stats = participantPredictions.reduce((accumulator, prediction) => {
+        const result = resultsByMatch.get(prediction.match_id);
+        const score = scorePrediction(prediction, result);
+        accumulator.points += score.points;
+        accumulator.exacts += score.exact;
+        accumulator.signs += score.sign && !score.exact ? 1 : 0;
+        accumulator.totalHits += score.sign;
+
+        if (result) {
+          const match = MATCHES.find(item => item.id === prediction.match_id);
+          if (match) accumulator.details.push({ match, prediction, result, score });
+        }
+
+        return accumulator;
+      }, { ...participant, points: 0, exacts: 0, signs: 0, totalHits: 0, details: [] });
+
+      stats.details.sort((a, b) => a.match.group.localeCompare(b.match.group) || a.match.id - b.match.id);
+      rankingDetailsByParticipant.set(participant.id, stats.details);
+      return stats;
     }).sort((a, b) => b.points - a.points || b.exacts - a.exacts || b.totalHits - a.totalHits || a.full_name.localeCompare(b.full_name));
 
-    if (results.length === 0) {
+    renderPodium(ranking);
+
+    if (officialResults.length === 0) {
       rankingNotice.textContent = "Todavía no hay resultados oficiales cargados. Todos figuran con 0 puntos.";
     }
 
     if (ranking.length === 0) {
-      rankingBody.innerHTML = `<tr><td colspan="6">Todavía no hay participantes registrados.</td></tr>`;
+      rankingBody.innerHTML = `<tr><td colspan="7">Todavía no hay participantes registrados.</td></tr>`;
       return;
     }
 
@@ -322,10 +419,12 @@ async function loadRanking() {
         <td>${participant.exacts}</td>
         <td>${participant.signs}</td>
         <td>${participant.totalHits}</td>
+        <td><button type="button" class="detail-button" data-participant-id="${participant.id}">Ver detalle</button></td>
       </tr>
     `).join("");
+    bindRankingDetailButtons(rankingBody);
   } catch (error) {
-    rankingBody.innerHTML = `<tr><td colspan="6">No se pudo cargar el ranking.</td></tr>`;
+    rankingBody.innerHTML = `<tr><td colspan="7">No se pudo cargar el ranking.</td></tr>`;
     showMessage(error.message || "Error cargando ranking.", "error");
   }
 }
@@ -334,16 +433,22 @@ function renderAdminMatches(resultsByMatch = new Map()) {
   const container = document.getElementById("resultsContainer");
   container.innerHTML = MATCHES.map(match => {
     const result = resultsByMatch.get(match.id);
+    const isLocked = result?.is_locked === true;
     return `
-      <article class="admin-match" data-match-id="${match.id}">
+      <article class="admin-match ${isLocked ? "locked-result" : ""}" data-match-id="${match.id}">
         <span class="admin-group">${match.group} · #${match.id}</span>
+        ${isLocked ? `<span class="closed-badge admin-closed-badge">Cerrado</span>` : ""}
         <div class="admin-teams">
           ${renderTeam(match.team1)}
-          <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles oficiales ${match.team1}" data-admin-goals="1" data-match-id="${match.id}" value="${result?.goals1 ?? ""}">
+          <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles oficiales ${match.team1}" data-admin-goals="1" data-match-id="${match.id}" value="${result?.goals1 ?? ""}" ${isLocked ? "disabled" : ""}>
           <span class="versus">vs</span>
-          <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles oficiales ${match.team2}" data-admin-goals="2" data-match-id="${match.id}" value="${result?.goals2 ?? ""}">
+          <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles oficiales ${match.team2}" data-admin-goals="2" data-match-id="${match.id}" value="${result?.goals2 ?? ""}" ${isLocked ? "disabled" : ""}>
           ${renderTeam(match.team2)}
         </div>
+        <label class="lock-control">
+          <input type="checkbox" data-admin-lock="true" data-match-id="${match.id}" ${isLocked ? "checked disabled" : ""}>
+          Cerrar partido
+        </label>
       </article>
     `;
   }).join("");
@@ -351,9 +456,9 @@ function renderAdminMatches(resultsByMatch = new Map()) {
 
 async function loadAdminResults() {
   assertSupabaseConfig();
-  const { data, error } = await supabaseClient.from("official_results").select("match_id, goals1, goals2");
+  const { data, error } = await supabaseClient.from("official_results").select("match_id, goals1, goals2, is_locked");
   if (error) throw error;
-  renderAdminMatches(new Map(data.map(result => [result.match_id, result])));
+  renderAdminMatches(new Map((data || []).map(result => [result.match_id, result])));
 }
 
 function readAdminResults() {
@@ -361,13 +466,17 @@ function readAdminResults() {
   for (const match of MATCHES) {
     const input1 = document.querySelector(`input[data-match-id="${match.id}"][data-admin-goals="1"]`);
     const input2 = document.querySelector(`input[data-match-id="${match.id}"][data-admin-goals="2"]`);
+    const lockInput = document.querySelector(`input[data-match-id="${match.id}"][data-admin-lock="true"]`);
+    if (lockInput?.disabled) continue;
+
     const raw1 = input1.value;
     const raw2 = input2.value;
+    const isLocked = lockInput?.checked === true;
 
     input1.classList.remove("input-error");
     input2.classList.remove("input-error");
 
-    if (raw1 === "" && raw2 === "") continue;
+    if (raw1 === "" && raw2 === "" && !isLocked) continue;
     if (raw1 === "" || raw2 === "") {
       input1.classList.add("input-error");
       input2.classList.add("input-error");
@@ -382,7 +491,7 @@ function readAdminResults() {
       throw new Error(`El partido #${match.id} tiene goles inválidos.`);
     }
 
-    rows.push({ match_id: match.id, goals1, goals2, updated_at: new Date().toISOString() });
+    rows.push({ match_id: match.id, goals1, goals2, is_locked: isLocked, updated_at: new Date().toISOString() });
   }
   return rows;
 }
@@ -593,6 +702,7 @@ function initAdminPage() {
       }
       const { error } = await supabaseClient.from("official_results").upsert(rows, { onConflict: "match_id" });
       if (error) throw error;
+      await loadAdminResults();
       showMessage("Resultados guardados correctamente.", "success");
     } catch (error) {
       showMessage(error.message || "No se pudieron guardar los resultados.", "error");
@@ -603,6 +713,10 @@ function initAdminPage() {
 if (page === "index") initIndexPage();
 if (page === "ranking") {
   document.getElementById("refreshRanking").addEventListener("click", loadRanking);
+  document.getElementById("closeDetailButton")?.addEventListener("click", closeRankingDetail);
+  document.getElementById("rankingDetailModal")?.addEventListener("click", event => {
+    if (event.target.id === "rankingDetailModal") closeRankingDetail();
+  });
   loadRanking();
 }
 if (page === "admin") initAdminPage();
