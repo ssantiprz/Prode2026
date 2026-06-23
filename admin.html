@@ -46,12 +46,24 @@
         <h2>Resultados oficiales</h2>
         <p>Podés guardar resultados parciales y volver a modificarlos más adelante. Completá ambos goles de cada partido que quieras actualizar.</p>
       </section>
-      <form id="resultsForm" novalidate>
-        <div id="resultsContainer" class="admin-list"></div>
-        <div class="actions sticky-actions">
-          <button type="submit" class="primary-button">Guardar resultados</button>
-        </div>
-      </form>
+
+      <div class="admin-tabs" role="tablist" aria-label="Estado de partidos oficiales">
+        <button id="openMatchesTab" type="button" class="admin-tab active" data-admin-tab="open" role="tab" aria-selected="true" aria-controls="openMatchesPanel">A completar (0)</button>
+        <button id="closedMatchesTab" type="button" class="admin-tab" data-admin-tab="closed" role="tab" aria-selected="false" aria-controls="closedMatchesPanel">Cerrados (0)</button>
+      </div>
+
+      <section id="openMatchesPanel" class="admin-tab-panel" role="tabpanel" aria-labelledby="openMatchesTab">
+        <form id="resultsForm" novalidate>
+          <div id="resultsContainer" class="admin-list"></div>
+          <div class="actions sticky-actions">
+            <button type="submit" class="primary-button">Guardar resultados</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="closedMatchesPanel" class="admin-tab-panel hidden" role="tabpanel" aria-labelledby="closedMatchesTab">
+        <div id="closedResultsContainer" class="admin-list"></div>
+      </section>
     </section>
 
     <div id="message" class="message" role="status" aria-live="polite"></div>

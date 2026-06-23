@@ -429,29 +429,56 @@ async function loadRanking() {
   }
 }
 
-function renderAdminMatches(resultsByMatch = new Map()) {
-  const container = document.getElementById("resultsContainer");
-  container.innerHTML = MATCHES.map(match => {
-    const result = resultsByMatch.get(match.id);
-    const isLocked = result?.is_locked === true;
-    return `
-      <article class="admin-match ${isLocked ? "locked-result" : ""}" data-match-id="${match.id}">
-        <span class="admin-group">${match.group} · #${match.id}</span>
-        ${isLocked ? `<span class="closed-badge admin-closed-badge">Cerrado</span>` : ""}
-        <div class="admin-teams">
-          ${renderTeam(match.team1)}
-          <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles oficiales ${match.team1}" data-admin-goals="1" data-match-id="${match.id}" value="${result?.goals1 ?? ""}" ${isLocked ? "disabled" : ""}>
-          <span class="versus">vs</span>
-          <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles oficiales ${match.team2}" data-admin-goals="2" data-match-id="${match.id}" value="${result?.goals2 ?? ""}" ${isLocked ? "disabled" : ""}>
-          ${renderTeam(match.team2)}
-        </div>
+function renderAdminMatch(match, result, isLocked) {
+  return `
+    <article class="admin-match ${isLocked ? "locked-result" : ""}" data-match-id="${match.id}">
+      <span class="admin-group">${match.group} · #${match.id}</span>
+      ${isLocked ? `<span class="closed-badge admin-closed-badge">Cerrado</span>` : ""}
+      <div class="admin-teams">
+        ${renderTeam(match.team1)}
+        <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles oficiales ${match.team1}" data-admin-goals="1" data-match-id="${match.id}" value="${result?.goals1 ?? ""}" ${isLocked ? "disabled" : ""}>
+        <span class="versus">vs</span>
+        <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles oficiales ${match.team2}" data-admin-goals="2" data-match-id="${match.id}" value="${result?.goals2 ?? ""}" ${isLocked ? "disabled" : ""}>
+        ${renderTeam(match.team2)}
+      </div>
+      ${isLocked ? "" : `
         <label class="lock-control">
-          <input type="checkbox" data-admin-lock="true" data-match-id="${match.id}" ${isLocked ? "checked disabled" : ""}>
+          <input type="checkbox" data-admin-lock="true" data-match-id="${match.id}">
           Cerrar partido
         </label>
-      </article>
-    `;
-  }).join("");
+      `}
+    </article>
+  `;
+}
+
+function renderAdminMatches(resultsByMatch = new Map()) {
+  const openContainer = document.getElementById("resultsContainer");
+  const closedContainer = document.getElementById("closedResultsContainer");
+  const openTab = document.getElementById("openMatchesTab");
+  const closedTab = document.getElementById("closedMatchesTab");
+  if (!openContainer || !closedContainer) return;
+
+  const openMatches = [];
+  const closedMatches = [];
+
+  MATCHES.forEach(match => {
+    const result = resultsByMatch.get(match.id);
+    const isLocked = result?.is_locked === true;
+    if (isLocked) {
+      closedMatches.push({ match, result });
+    } else {
+      openMatches.push({ match, result });
+    }
+  });
+
+  openTab.textContent = `A completar (${openMatches.length})`;
+  closedTab.textContent = `Cerrados (${closedMatches.length})`;
+  openContainer.innerHTML = openMatches.length
+    ? openMatches.map(({ match, result }) => renderAdminMatch(match, result, false)).join("")
+    : `<div class="empty-admin-state">No hay partidos a completar.</div>`;
+  closedContainer.innerHTML = closedMatches.length
+    ? closedMatches.map(({ match, result }) => renderAdminMatch(match, result, true)).join("")
+    : `<div class="empty-admin-state">No hay partidos cerrados.</div>`;
 }
 
 async function loadAdminResults() {
@@ -463,11 +490,12 @@ async function loadAdminResults() {
 
 function readAdminResults() {
   const rows = [];
+  const openContainer = document.getElementById("resultsContainer");
   for (const match of MATCHES) {
-    const input1 = document.querySelector(`input[data-match-id="${match.id}"][data-admin-goals="1"]`);
-    const input2 = document.querySelector(`input[data-match-id="${match.id}"][data-admin-goals="2"]`);
-    const lockInput = document.querySelector(`input[data-match-id="${match.id}"][data-admin-lock="true"]`);
-    if (lockInput?.disabled) continue;
+    const input1 = openContainer?.querySelector(`input[data-match-id="${match.id}"][data-admin-goals="1"]`);
+    const input2 = openContainer?.querySelector(`input[data-match-id="${match.id}"][data-admin-goals="2"]`);
+    const lockInput = openContainer?.querySelector(`input[data-match-id="${match.id}"][data-admin-lock="true"]`);
+    if (!input1 || !input2 || !lockInput || lockInput.disabled) continue;
 
     const raw1 = input1.value;
     const raw2 = input2.value;
@@ -660,12 +688,25 @@ async function exportSelectedParticipantPdf() {
   }
 }
 
+
+function switchAdminTab(tabName) {
+  const isClosedTab = tabName === "closed";
+  document.getElementById("openMatchesPanel")?.classList.toggle("hidden", isClosedTab);
+  document.getElementById("closedMatchesPanel")?.classList.toggle("hidden", !isClosedTab);
+  document.querySelectorAll(".admin-tab").forEach(tab => {
+    const isActive = tab.dataset.adminTab === tabName;
+    tab.classList.toggle("active", isActive);
+    tab.setAttribute("aria-selected", String(isActive));
+  });
+}
+
 function initAdminPage() {
   renderAdminMatches();
   const loginButton = document.getElementById("loginButton");
   const passwordInput = document.getElementById("adminPassword");
   const resultsForm = document.getElementById("resultsForm");
   const exportPdfButton = document.getElementById("exportPdfButton");
+  const adminTabs = document.querySelectorAll(".admin-tab");
 
   loginButton.addEventListener("click", async () => {
     if (passwordInput.value !== ADMIN_PASSWORD) {
@@ -690,6 +731,7 @@ function initAdminPage() {
   });
 
   exportPdfButton.addEventListener("click", exportSelectedParticipantPdf);
+  adminTabs.forEach(tab => tab.addEventListener("click", () => switchAdminTab(tab.dataset.adminTab)));
 
   resultsForm.addEventListener("submit", async event => {
     event.preventDefault();

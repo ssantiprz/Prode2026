@@ -367,6 +367,33 @@ tbody tr:nth-child(even) { background: #f8fbff; }
 .admin-message.success { background: #ddf8e9; color: #075c34; }
 .admin-message.error { background: #ffe4e4; color: #a82020; }
 
+
+.admin-tabs {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.admin-tab {
+  flex: 1;
+  color: var(--blue);
+  background: #eaf1ff;
+  box-shadow: none;
+}
+.admin-tab.active {
+  color: white;
+  background: var(--blue);
+}
+.admin-tab-panel { margin-top: 1rem; }
+.empty-admin-state {
+  padding: 1rem;
+  border: 1px dashed var(--line);
+  border-radius: 1rem;
+  color: var(--muted);
+  background: #fbfdff;
+  font-weight: 800;
+  text-align: center;
+}
+
 .admin-list { display: grid; gap: 0.8rem; }
 .admin-match { padding: 1rem; box-shadow: none; }
 .admin-teams {
@@ -576,6 +603,14 @@ tbody tr:nth-child(even) { background: #f8fbff; }
 
   .export-controls {
     grid-template-columns: 1fr;
+  }
+
+  .admin-tabs {
+    flex-direction: column;
+  }
+
+  .admin-tab {
+    width: 100%;
   }
 
   .admin-match {
