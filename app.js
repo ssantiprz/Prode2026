@@ -480,7 +480,7 @@ function renderAdminMatch(match, result, isLocked) {
   return `
     <article class="admin-match ${isLocked ? "locked-result" : ""}" data-match-id="${match.id}">
       <span class="admin-group">${match.group} · #${match.id}</span>
-      ${isLocked ? `<span class="closed-badge admin-closed-badge">Cerrado</span>` : isStarted ? `<span class="closed-badge admin-closed-badge started-badge">Iniciado</span>` : ""}
+      ${isLocked ? `<span class="closed-badge admin-closed-badge">Cerrado</span>` : ""}
       <div class="admin-teams">
         ${renderTeam(match.team1)}
         <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles oficiales ${match.team1}" data-admin-goals="1" data-match-id="${match.id}" value="${result?.goals1 ?? ""}" ${isLocked ? "disabled" : ""}>
