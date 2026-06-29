@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prode 2026</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="index">
+  <header class="hero">
+    <nav class="top-nav" aria-label="Navegación principal">
+      <a class="nav-link active" href="index.html">Cargar prode</a>
+      <a class="nav-link" href="knockout.html">Eliminatorias</a>
+      <a class="nav-link" href="ranking.html">Ver ranking</a>
+    </nav>
+    <div class="hero-content">
+      <p class="eyebrow">Mundial 2026 · Fase de grupos</p>
+      <h1>Prode 2026</h1>
+      <p>Completá tus pronósticos de resultado exacto para los 72 partidos.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card intro-card">
+      <h2>Datos del participante</h2>
+      <label for="fullName">Nombre y Apellido <span aria-hidden="true">*</span></label>
+      <input id="fullName" name="fullName" type="text" autocomplete="name" placeholder="Ej: Juan Pérez" required>
+      <p class="help-text">No necesitás usuario ni contraseña. El nombre no puede repetirse.</p>
+    </section>
+
+    <form id="predictionForm" novalidate>
+      <section id="matchesContainer" class="groups-grid" aria-live="polite"></section>
+      <div class="actions sticky-actions">
+        <button type="submit" class="primary-button">Ver resumen</button>
+      </div>
+    </form>
+
+    <section id="summarySection" class="card summary-section hidden" aria-live="polite">
+      <h2>Resumen de pronósticos</h2>
+      <p>Revisá todos los resultados antes de guardar. Una vez confirmado, se registrará tu participación.</p>
+      <div id="summaryList" class="summary-list"></div>
+      <div class="actions">
+        <button id="editButton" type="button" class="secondary-button">Editar</button>
+        <button id="confirmButton" type="button" class="primary-button">Confirmar y guardar</button>
+      </div>
+    </section>
+
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="data.js"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

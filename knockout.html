@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eliminatorias Prode 2026</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="knockout">
+  <header class="hero compact-hero">
+    <nav class="top-nav" aria-label="Navegación principal">
+      <a class="nav-link" href="index.html">Cargar prode</a>
+      <a class="nav-link active" href="knockout.html">Eliminatorias</a>
+      <a class="nav-link" href="ranking.html">Ver ranking</a>
+    </nav>
+    <div class="hero-content">
+      <p class="eyebrow">Mundial 2026 · Eliminatorias</p>
+      <h1>Eliminatorias Prode 2026</h1>
+      <p>Cargá o actualizá tus pronósticos desde Dieciseisavos hasta la Final.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="knockoutLogin" class="card intro-card">
+      <h2>Ingresar participante</h2>
+      <label for="knockoutFullName">Nombre y Apellido <span aria-hidden="true">*</span></label>
+      <input id="knockoutFullName" type="text" autocomplete="name" placeholder="Ej: Juan Pérez" required>
+      <label for="knockoutPin">PIN de 4 dígitos <span aria-hidden="true">*</span></label>
+      <input id="knockoutPin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" placeholder="1234" required>
+      <p class="help-text">Usá el PIN informado por la organización para cargar eliminatorias.</p>
+      <button id="knockoutLoginButton" type="button" class="primary-button full-width">Ingresar</button>
+    </section>
+
+    <section id="knockoutPanel" class="hidden">
+      <section class="card section-heading">
+        <div>
+          <h2 id="knockoutParticipantName">Eliminatorias</h2>
+          <p class="help-text">Los cruces pendientes se habilitan automáticamente cuando el admin cierra el partido origen.</p>
+        </div>
+        <button id="refreshKnockout" type="button" class="secondary-button">Actualizar cruces</button>
+      </section>
+
+      <form id="knockoutForm" novalidate>
+        <section id="knockoutMatchesContainer" class="groups-grid" aria-live="polite"></section>
+        <div class="actions sticky-actions">
+          <button type="submit" class="primary-button">Guardar eliminatorias</button>
+        </div>
+      </form>
+    </section>
+
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="data.js"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
