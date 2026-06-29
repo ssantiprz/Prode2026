@@ -380,13 +380,15 @@ async function loadRanking(mode = currentRankingMode) {
 
     let ranking;
     if (mode === "knockout") {
-      const [knockoutPredictions, knockoutResults] = await Promise.all([
+      const [knockoutPredictions, knockoutResults, knockoutMatches] = await Promise.all([
         safeSelect("knockout_predictions", "participant_id, match_id, goals1, goals2, predicted_winner"),
-        safeSelect("knockout_results", "match_id, goals1, goals2, winner_team, loser_team, is_locked")
+        safeSelect("knockout_results", "match_id, goals1, goals2, winner_team, loser_team, is_locked"),
+        loadKnockoutMatches()
       ]);
       const officialKnockoutResults = (knockoutResults || []).filter(result => result.is_locked);
       const knockoutResultsByMatch = new Map(officialKnockoutResults.map(result => [result.match_id, result]));
       const allKnockoutPredictions = knockoutPredictions || [];
+      const knockoutMatchesById = new Map((knockoutMatches || []).map(match => [match.id, match]));
 
       ranking = allParticipants.map(participant => {
         const stats = { ...participant, points: 0, exacts: 0, signs: 0, totalHits: 0, details: [] };
@@ -400,7 +402,7 @@ async function loadRanking(mode = currentRankingMode) {
             stats.exacts += score.exact;
             stats.signs += score.sign && !score.exact ? 1 : 0;
             stats.totalHits += score.sign;
-            const baseMatch = KNOCKOUT_MATCHES.find(item => item.id === prediction.match_id);
+            const baseMatch = knockoutMatchesById.get(prediction.match_id);
             if (baseMatch) {
               stats.details.push({ type: "knockout", match: getResolvedKnockoutMatch(baseMatch, knockoutResultsByMatch), prediction, result, score });
             }
@@ -817,6 +819,7 @@ function initAdminPage() {
 let knockoutParticipant = null;
 let knockoutResultsCache = new Map();
 let knockoutStatusCache = new Map();
+let knockoutMatchesCache = [];
 
 function normalizePin(pin) {
   return String(pin || "").trim();
@@ -893,6 +896,28 @@ function isKnockoutStarted(matchId, statusByMatch = knockoutStatusCache) {
   return statusByMatch.get(matchId)?.is_started === true;
 }
 
+function normalizeKnockoutMatch(row) {
+  return {
+    id: row.id,
+    phase: row.phase,
+    team1: row.team1,
+    team2: row.team2,
+    source1Type: row.source1_type,
+    source1MatchId: row.source1_match_id,
+    source2Type: row.source2_type,
+    source2MatchId: row.source2_match_id,
+    sortOrder: row.sort_order
+  };
+}
+
+async function loadKnockoutMatches() {
+  const rows = await safeSelect("knockout_matches", "id, phase, team1, team2, source1_type, source1_match_id, source2_type, source2_match_id, sort_order");
+  knockoutMatchesCache = (rows || [])
+    .map(normalizeKnockoutMatch)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  return knockoutMatchesCache;
+}
+
 async function authenticateKnockoutParticipant() {
   const fullNameInput = document.getElementById("knockoutFullName");
   const pinInput = document.getElementById("knockoutPin");
@@ -931,19 +956,20 @@ async function authenticateKnockoutParticipant() {
 
 async function loadKnockoutPageData() {
   assertSupabaseConfig();
-  const [resultsByMatch, statusByMatch, predictions] = await Promise.all([
+  const [matches, resultsByMatch, statusByMatch, predictions] = await Promise.all([
+    loadKnockoutMatches(),
     loadKnockoutResultsMap(),
     loadKnockoutStatusMap(),
     safeSelect("knockout_predictions", "match_id, goals1, goals2, predicted_winner, participant_id")
   ]);
   const participantPredictions = new Map(predictions.filter(prediction => prediction.participant_id === knockoutParticipant.id).map(prediction => [prediction.match_id, prediction]));
-  renderKnockoutForm(resultsByMatch, participantPredictions, statusByMatch);
+  renderKnockoutForm(matches, resultsByMatch, participantPredictions, statusByMatch);
 }
 
-function renderKnockoutForm(resultsByMatch, predictionsByMatch = new Map(), statusByMatch = knockoutStatusCache) {
+function renderKnockoutForm(matches, resultsByMatch, predictionsByMatch = new Map(), statusByMatch = knockoutStatusCache) {
   const container = document.getElementById("knockoutMatchesContainer");
   if (!container) return;
-  const groups = groupKnockoutMatches();
+  const groups = groupKnockoutMatches(matches);
   container.innerHTML = Object.entries(groups).map(([phase, matches]) => `
     <section class="group-card knockout-phase-card">
       <h2>${phase}</h2>
@@ -1143,8 +1169,8 @@ async function loadKnockoutAdminResults() {
   const container = document.getElementById("knockoutAdminContainer");
   if (!container) return;
   container.innerHTML = `<div class="empty-admin-state">Cargando eliminatorias...</div>`;
-  const [resultsByMatch, statusByMatch] = await Promise.all([loadKnockoutResultsMap(), loadKnockoutStatusMap()]);
-  const groups = groupKnockoutMatches();
+  const [matches, resultsByMatch, statusByMatch] = await Promise.all([loadKnockoutMatches(), loadKnockoutResultsMap(), loadKnockoutStatusMap()]);
+  const groups = groupKnockoutMatches(matches);
   container.innerHTML = Object.entries(groups).map(([phase, matches]) => `
     <section class="group-card knockout-phase-card">
       <h2>${phase}</h2>
