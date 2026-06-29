@@ -653,3 +653,122 @@ tbody tr:nth-child(even) { background: #f8fbff; }
     width: 100%;
   }
 }
+
+select {
+  width: 100%;
+  border: 2px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 0.85rem 1rem;
+  font: inherit;
+  background: #fbfdff;
+}
+
+.knockout-row {
+  grid-template-columns: 3.2rem minmax(0, 1fr) 4.5rem 2rem 4.5rem minmax(0, 1fr);
+}
+
+.winner-select {
+  grid-column: 2 / -1;
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.pending-note {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-top: 0.25rem;
+}
+
+.admin-module-tabs { margin-bottom: 1.25rem; }
+.admin-module-panel { margin-top: 1rem; }
+
+.pin-list { display: grid; gap: 0.75rem; }
+.pin-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: #fbfdff;
+}
+.pin-card div { display: grid; gap: 0.25rem; }
+.pin-card span { color: var(--muted); font-weight: 800; }
+
+.knockout-admin-match .winner-select { grid-column: 1 / -1; }
+
+@media (max-width: 768px) {
+  .knockout-row {
+    grid-template-columns: minmax(0, 1fr) 48px 2rem 48px minmax(0, 1fr);
+  }
+
+  .knockout-row .match-number {
+    grid-column: 1 / -1;
+  }
+
+  .winner-select {
+    grid-column: 1 / -1;
+  }
+
+  .pin-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-module-tabs .admin-tab {
+    width: 100%;
+  }
+}
+
+.ranking-tabs {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.ranking-tab {
+  flex: 1;
+  color: var(--blue);
+  background: #eaf1ff;
+  box-shadow: none;
+}
+
+.ranking-tab.active {
+  color: white;
+  background: var(--blue);
+}
+
+@media (max-width: 768px) {
+  .ranking-tabs {
+    flex-direction: column;
+  }
+
+  .ranking-tab {
+    width: 100%;
+  }
+}
+
+.started-badge {
+  color: #173f8f;
+  background: #e8f0ff;
+  border-color: #b8ccff;
+}
+
+.admin-inline-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .admin-inline-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

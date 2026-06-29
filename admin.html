@@ -10,12 +10,13 @@
   <header class="hero compact-hero admin-hero">
     <nav class="top-nav" aria-label="Navegación principal">
       <a class="nav-link" href="index.html">Cargar prode</a>
+      <a class="nav-link" href="knockout.html">Eliminatorias</a>
       <a class="nav-link" href="ranking.html">Ver ranking</a>
     </nav>
     <div class="hero-content">
       <p class="eyebrow">Panel interno</p>
       <h1>Admin Prode 2026</h1>
-      <p>Cargá o modificá los resultados oficiales de la fase de grupos.</p>
+      <p>Gestioná resultados oficiales, eliminatorias y PIN de participantes.</p>
     </div>
   </header>
 
@@ -42,27 +43,61 @@
         <div id="pdfExportMessage" class="admin-message" role="status" aria-live="polite"></div>
       </section>
 
-      <section class="card warning-card">
-        <h2>Resultados oficiales</h2>
-        <p>Podés guardar resultados parciales y volver a modificarlos más adelante. Completá ambos goles de cada partido que quieras actualizar.</p>
-      </section>
-
-      <div class="admin-tabs" role="tablist" aria-label="Estado de partidos oficiales">
-        <button id="openMatchesTab" type="button" class="admin-tab active" data-admin-tab="open" role="tab" aria-selected="true" aria-controls="openMatchesPanel">A completar (0)</button>
-        <button id="closedMatchesTab" type="button" class="admin-tab" data-admin-tab="closed" role="tab" aria-selected="false" aria-controls="closedMatchesPanel">Cerrados (0)</button>
+      <div class="admin-tabs admin-module-tabs" role="tablist" aria-label="Módulos del panel admin">
+        <button type="button" class="admin-tab active" data-admin-module="groups" role="tab" aria-selected="true" aria-controls="groupResultsModule">Resultados fase de grupos</button>
+        <button type="button" class="admin-tab" data-admin-module="knockout" role="tab" aria-selected="false" aria-controls="knockoutResultsModule">Resultados eliminatorias</button>
+        <button type="button" class="admin-tab" data-admin-module="pins" role="tab" aria-selected="false" aria-controls="pinsModule">PIN participantes</button>
       </div>
 
-      <section id="openMatchesPanel" class="admin-tab-panel" role="tabpanel" aria-labelledby="openMatchesTab">
-        <form id="resultsForm" novalidate>
-          <div id="resultsContainer" class="admin-list"></div>
+      <section id="groupResultsModule" class="admin-module-panel" role="tabpanel">
+        <section class="card warning-card">
+          <h2>Resultados fase de grupos</h2>
+          <p>Podés guardar resultados parciales y volver a modificarlos más adelante. Completá ambos goles de cada partido que quieras actualizar.</p>
+        </section>
+
+        <div class="admin-tabs" role="tablist" aria-label="Estado de partidos oficiales">
+          <button id="openMatchesTab" type="button" class="admin-tab active" data-admin-tab="open" role="tab" aria-selected="true" aria-controls="openMatchesPanel">A completar (0)</button>
+          <button id="closedMatchesTab" type="button" class="admin-tab" data-admin-tab="closed" role="tab" aria-selected="false" aria-controls="closedMatchesPanel">Cerrados (0)</button>
+        </div>
+
+        <section id="openMatchesPanel" class="admin-tab-panel" role="tabpanel" aria-labelledby="openMatchesTab">
+          <form id="resultsForm" novalidate>
+            <div id="resultsContainer" class="admin-list"></div>
+            <div class="actions sticky-actions">
+              <button type="submit" class="primary-button">Guardar resultados</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="closedMatchesPanel" class="admin-tab-panel hidden" role="tabpanel" aria-labelledby="closedMatchesTab">
+          <div id="closedResultsContainer" class="admin-list"></div>
+        </section>
+      </section>
+
+      <section id="knockoutResultsModule" class="admin-module-panel hidden" role="tabpanel">
+        <section class="card warning-card">
+          <h2>Resultados eliminatorias</h2>
+          <p>Los cruces se completan automáticamente con ganadores o perdedores de partidos cerrados. Si un partido está cerrado, se corrige manualmente desde Supabase.</p>
+        </section>
+        <form id="knockoutResultsForm" novalidate>
+          <div id="knockoutAdminContainer" class="admin-list"></div>
           <div class="actions sticky-actions">
-            <button type="submit" class="primary-button">Guardar resultados</button>
+            <button type="submit" class="primary-button">Guardar eliminatorias</button>
           </div>
         </form>
       </section>
 
-      <section id="closedMatchesPanel" class="admin-tab-panel hidden" role="tabpanel" aria-labelledby="closedMatchesTab">
-        <div id="closedResultsContainer" class="admin-list"></div>
+      <section id="pinsModule" class="admin-module-panel hidden" role="tabpanel">
+        <section class="card">
+          <div class="section-heading">
+            <div>
+              <h2>PIN participantes</h2>
+              <p class="help-text">Generá y consultá el PIN de 4 dígitos para que cada participante ingrese a eliminatorias.</p>
+            </div>
+            <button id="refreshPinsButton" type="button" class="secondary-button">Actualizar</button>
+          </div>
+          <div id="pinsContainer" class="pin-list" aria-live="polite"></div>
+        </section>
       </section>
     </section>
 

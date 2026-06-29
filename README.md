@@ -89,3 +89,18 @@ Ejemplos:
 - Pronóstico 1-0 y resultado real 2-1 = 1 punto.
 - Pronóstico 1-1 y resultado real 2-1 = 0 puntos.
 - Pronóstico 0-1 y resultado real 2-1 = 0 puntos.
+
+## Agregar módulo de eliminatorias en un proyecto existente
+
+Para habilitar `knockout.html` sin borrar datos actuales:
+
+1. Abrí el proyecto en Supabase.
+2. Entrá en **SQL Editor**.
+3. Creá una nueva query.
+4. Copiá y pegá el contenido completo de `migration.sql`.
+5. Ejecutá la query una sola vez. La migración usa `IF NOT EXISTS`/`ON CONFLICT` para no borrar participantes, predicciones ni resultados existentes.
+6. Verificá que existan las tablas `knockout_matches`, `knockout_predictions` y `knockout_results`, y que `participants` tenga la columna `pin_code`.
+7. Desde `admin.html`, ingresá al panel admin, abrí **PIN participantes** y generá/informá el PIN de 4 dígitos a cada participante.
+8. Los participantes podrán entrar en `knockout.html` con Nombre y Apellido + PIN para cargar eliminatorias.
+
+Los resultados de eliminatorias se cargan desde el módulo **Resultados eliminatorias** del admin. Los cruces que dependen de ganadores o perdedores se completan automáticamente cuando el partido origen está cerrado.

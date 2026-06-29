@@ -8,6 +8,7 @@ let currentPredictions = [];
 let closedMatchIds = new Set();
 let closedMatchesLoadPromise = Promise.resolve();
 let rankingDetailsByParticipant = new Map();
+let currentRankingMode = "groups";
 
 function normalizeName(name) {
   return name.trim().replace(/\s+/g, " ");
@@ -296,7 +297,7 @@ function renderPodium(ranking) {
       <strong>${participant.points} pts</strong>
       <div class="podium-stats">
         <span>Exactos: ${participant.exacts}</span>
-        <span>Signos: ${participant.signs}</span>
+        <span>${currentRankingMode === "knockout" ? "Ganadores" : "Signos"}: ${participant.signs}</span>
       </div>
       <button type="button" class="detail-button" data-participant-id="${participant.id}">Ver detalle</button>
     </article>
@@ -324,16 +325,22 @@ function openRankingDetail(participantId) {
   title.textContent = `Detalle de ${participantName}`;
 
   if (details.length === 0) {
-    content.innerHTML = `<p class="empty-detail">Todavía no hay partidos con resultado oficial para este participante.</p>`;
+    content.innerHTML = `<p class="empty-detail">Todavía no hay partidos ${currentRankingMode === "knockout" ? "de eliminatorias cerrados" : "con resultado oficial"} para este participante.</p>`;
   } else {
-    content.innerHTML = details.map(({ match, prediction, result, score }) => {
+    content.innerHTML = details.map(({ match, prediction, result, score, type }) => {
       const status = getDetailResultClass(score);
+      const isKnockout = type === "knockout";
+      const phase = isKnockout ? match.phase : match.group;
+      const team1 = isKnockout ? match.resolvedTeam1 : match.team1;
+      const team2 = isKnockout ? match.resolvedTeam2 : match.team2;
+      const extra = isKnockout ? `<small>Clasificado pronosticado: ${getTeamLabel(prediction.predicted_winner)}</small><small>Clasificado oficial: ${getTeamLabel(result.winner_team)}</small>` : "";
       return `
         <article class="detail-item ${status.className}">
           <div>
-            <strong>#${match.id} · ${match.group}</strong>
-            <span>${getTeamLabel(match.team1)} ${prediction.goals1} - ${prediction.goals2} ${getTeamLabel(match.team2)}</span>
-            <small>Oficial: ${getTeamLabel(match.team1)} ${result.goals1} - ${result.goals2} ${getTeamLabel(match.team2)}</small>
+            <strong>#${match.id} · ${phase}</strong>
+            <span>${getTeamLabel(team1)} ${prediction.goals1} - ${prediction.goals2} ${getTeamLabel(team2)}</span>
+            <small>Oficial: ${getTeamLabel(team1)} ${result.goals1} - ${result.goals2} ${getTeamLabel(team2)}</small>
+            ${extra}
           </div>
           <strong class="detail-points">${status.label}</strong>
         </article>
@@ -354,57 +361,95 @@ function bindRankingDetailButtons(scope = document) {
   });
 }
 
-async function loadRanking() {
+async function loadRanking(mode = currentRankingMode) {
+  currentRankingMode = mode;
   const rankingBody = document.getElementById("rankingBody");
   const rankingNotice = document.getElementById("rankingNotice");
+  const rankingTitle = document.getElementById("rankingTitle");
+  const rankingSignHeader = document.getElementById("rankingSignHeader");
   rankingBody.innerHTML = `<tr><td colspan="7">Cargando ranking...</td></tr>`;
   rankingNotice.textContent = "";
+  if (rankingTitle) rankingTitle.textContent = mode === "knockout" ? "Ranking eliminatorias" : "Ranking fase de grupos";
+  if (rankingSignHeader) rankingSignHeader.textContent = mode === "knockout" ? "Ganadores acertados" : "Signos acertados";
 
   try {
     assertSupabaseConfig();
-    const [{ data: participants, error: participantsError }, { data: predictions, error: predictionsError }, { data: results, error: resultsError }] = await Promise.all([
-      supabaseClient.from("participants").select("id, full_name, created_at"),
-      supabaseClient.from("predictions").select("participant_id, match_id, goals1, goals2"),
-      supabaseClient.from("official_results").select("match_id, goals1, goals2, is_locked")
-    ]);
-
-    if (participantsError) throw participantsError;
-    if (predictionsError) throw predictionsError;
-    if (resultsError) throw resultsError;
-
-    const officialResults = results || [];
+    const participants = await safeSelect("participants", "id, full_name, created_at");
     const allParticipants = participants || [];
-    const allPredictions = predictions || [];
-    const resultsByMatch = new Map(officialResults.map(result => [result.match_id, result]));
     rankingDetailsByParticipant = new Map();
-    const ranking = allParticipants.map(participant => {
-      const participantPredictions = allPredictions.filter(prediction => prediction.participant_id === participant.id);
-      const stats = participantPredictions.reduce((accumulator, prediction) => {
-        const result = resultsByMatch.get(prediction.match_id);
-        const score = scorePrediction(prediction, result);
-        accumulator.points += score.points;
-        accumulator.exacts += score.exact;
-        accumulator.signs += score.sign && !score.exact ? 1 : 0;
-        accumulator.totalHits += score.sign;
 
-        if (result) {
-          const match = MATCHES.find(item => item.id === prediction.match_id);
-          if (match) accumulator.details.push({ match, prediction, result, score });
-        }
+    let ranking;
+    if (mode === "knockout") {
+      const [knockoutPredictions, knockoutResults] = await Promise.all([
+        safeSelect("knockout_predictions", "participant_id, match_id, goals1, goals2, predicted_winner"),
+        safeSelect("knockout_results", "match_id, goals1, goals2, winner_team, loser_team, is_locked")
+      ]);
+      const officialKnockoutResults = (knockoutResults || []).filter(result => result.is_locked);
+      const knockoutResultsByMatch = new Map(officialKnockoutResults.map(result => [result.match_id, result]));
+      const allKnockoutPredictions = knockoutPredictions || [];
 
-        return accumulator;
-      }, { ...participant, points: 0, exacts: 0, signs: 0, totalHits: 0, details: [] });
+      ranking = allParticipants.map(participant => {
+        const stats = { ...participant, points: 0, exacts: 0, signs: 0, totalHits: 0, details: [] };
+        allKnockoutPredictions
+          .filter(prediction => prediction.participant_id === participant.id)
+          .forEach(prediction => {
+            const result = knockoutResultsByMatch.get(prediction.match_id);
+            if (!result) return;
+            const score = scoreKnockoutPrediction(prediction, result);
+            stats.points += score.points;
+            stats.exacts += score.exact;
+            stats.signs += score.sign && !score.exact ? 1 : 0;
+            stats.totalHits += score.sign;
+            const baseMatch = KNOCKOUT_MATCHES.find(item => item.id === prediction.match_id);
+            if (baseMatch) {
+              stats.details.push({ type: "knockout", match: getResolvedKnockoutMatch(baseMatch, knockoutResultsByMatch), prediction, result, score });
+            }
+          });
+        stats.details.sort((a, b) => a.match.id - b.match.id);
+        rankingDetailsByParticipant.set(participant.id, stats.details);
+        return stats;
+      });
 
-      stats.details.sort((a, b) => a.match.group.localeCompare(b.match.group) || a.match.id - b.match.id);
-      rankingDetailsByParticipant.set(participant.id, stats.details);
-      return stats;
-    }).sort((a, b) => b.points - a.points || b.exacts - a.exacts || b.totalHits - a.totalHits || a.full_name.localeCompare(b.full_name));
+      if (officialKnockoutResults.length === 0) {
+        rankingNotice.textContent = "Todavía no hay resultados cerrados de eliminatorias. Todos figuran con 0 puntos.";
+      }
+    } else {
+      const [predictions, results] = await Promise.all([
+        safeSelect("predictions", "participant_id, match_id, goals1, goals2"),
+        safeSelect("official_results", "match_id, goals1, goals2, is_locked")
+      ]);
+      const officialResults = results || [];
+      const allPredictions = predictions || [];
+      const resultsByMatch = new Map(officialResults.map(result => [result.match_id, result]));
 
-    renderPodium(ranking);
+      ranking = allParticipants.map(participant => {
+        const stats = { ...participant, points: 0, exacts: 0, signs: 0, totalHits: 0, details: [] };
+        allPredictions
+          .filter(prediction => prediction.participant_id === participant.id)
+          .forEach(prediction => {
+            const result = resultsByMatch.get(prediction.match_id);
+            const score = scorePrediction(prediction, result);
+            stats.points += score.points;
+            stats.exacts += score.exact;
+            stats.signs += score.sign && !score.exact ? 1 : 0;
+            stats.totalHits += score.sign;
+            if (result) {
+              const match = MATCHES.find(item => item.id === prediction.match_id);
+              if (match) stats.details.push({ type: "groups", match, prediction, result, score });
+            }
+          });
+        stats.details.sort((a, b) => a.match.group.localeCompare(b.match.group) || a.match.id - b.match.id);
+        rankingDetailsByParticipant.set(participant.id, stats.details);
+        return stats;
+      });
 
-    if (officialResults.length === 0) {
-      rankingNotice.textContent = "Todavía no hay resultados oficiales cargados. Todos figuran con 0 puntos.";
+      if (officialResults.length === 0) {
+        rankingNotice.textContent = "Todavía no hay resultados oficiales de fase de grupos cargados. Todos figuran con 0 puntos.";
+      }
     }
+
+    ranking.sort((a, b) => b.points - a.points || b.exacts - a.exacts || b.totalHits - a.totalHits || a.full_name.localeCompare(b.full_name));
+    renderPodium(ranking);
 
     if (ranking.length === 0) {
       rankingBody.innerHTML = `<tr><td colspan="7">Todavía no hay participantes registrados.</td></tr>`;
@@ -433,7 +478,7 @@ function renderAdminMatch(match, result, isLocked) {
   return `
     <article class="admin-match ${isLocked ? "locked-result" : ""}" data-match-id="${match.id}">
       <span class="admin-group">${match.group} · #${match.id}</span>
-      ${isLocked ? `<span class="closed-badge admin-closed-badge">Cerrado</span>` : ""}
+      ${isLocked ? `<span class="closed-badge admin-closed-badge">Cerrado</span>` : isStarted ? `<span class="closed-badge admin-closed-badge started-badge">Iniciado</span>` : ""}
       <div class="admin-teams">
         ${renderTeam(match.team1)}
         <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles oficiales ${match.team1}" data-admin-goals="1" data-match-id="${match.id}" value="${result?.goals1 ?? ""}" ${isLocked ? "disabled" : ""}>
@@ -693,7 +738,7 @@ function switchAdminTab(tabName) {
   const isClosedTab = tabName === "closed";
   document.getElementById("openMatchesPanel")?.classList.toggle("hidden", isClosedTab);
   document.getElementById("closedMatchesPanel")?.classList.toggle("hidden", !isClosedTab);
-  document.querySelectorAll(".admin-tab").forEach(tab => {
+  document.querySelectorAll("[data-admin-tab]").forEach(tab => {
     const isActive = tab.dataset.adminTab === tabName;
     tab.classList.toggle("active", isActive);
     tab.setAttribute("aria-selected", String(isActive));
@@ -707,6 +752,10 @@ function initAdminPage() {
   const resultsForm = document.getElementById("resultsForm");
   const exportPdfButton = document.getElementById("exportPdfButton");
   const adminTabs = document.querySelectorAll(".admin-tab");
+  const moduleTabs = document.querySelectorAll("[data-admin-module]");
+  const knockoutResultsForm = document.getElementById("knockoutResultsForm");
+  const refreshPinsButton = document.getElementById("refreshPinsButton");
+  const knockoutAdminContainer = document.getElementById("knockoutAdminContainer");
 
   loginButton.addEventListener("click", async () => {
     if (passwordInput.value !== ADMIN_PASSWORD) {
@@ -725,13 +774,27 @@ function initAdminPage() {
 
     try {
       await loadParticipantsForExport();
+      await loadPinsAdmin();
+      await loadKnockoutAdminResults();
     } catch (error) {
       showPdfExportMessage(error.message || "No se pudieron cargar los participantes.", "error");
     }
   });
 
   exportPdfButton.addEventListener("click", exportSelectedParticipantPdf);
-  adminTabs.forEach(tab => tab.addEventListener("click", () => switchAdminTab(tab.dataset.adminTab)));
+  adminTabs.forEach(tab => {
+    if (tab.dataset.adminTab) tab.addEventListener("click", () => switchAdminTab(tab.dataset.adminTab));
+  });
+  moduleTabs.forEach(tab => tab.addEventListener("click", () => switchAdminModule(tab.dataset.adminModule)));
+  refreshPinsButton?.addEventListener("click", loadPinsAdmin);
+  knockoutAdminContainer?.addEventListener("input", event => {
+    if (event.target.matches('[data-ko-admin-goals="1"], [data-ko-admin-goals="2"]')) updateKnockoutAdminWinnerSelectors(event.target.closest(".knockout-admin-match"));
+  });
+  knockoutAdminContainer?.addEventListener("click", event => {
+    const startButton = event.target.closest("[data-start-ko-match]");
+    if (startButton && !startButton.disabled) markKnockoutMatchStarted(startButton.dataset.startKoMatch);
+  });
+  knockoutResultsForm?.addEventListener("submit", saveKnockoutAdminResults);
 
   resultsForm.addEventListener("submit", async event => {
     event.preventDefault();
@@ -751,14 +814,439 @@ function initAdminPage() {
     }
   });
 }
+let knockoutParticipant = null;
+let knockoutResultsCache = new Map();
+let knockoutStatusCache = new Map();
+
+function normalizePin(pin) {
+  return String(pin || "").trim();
+}
+
+function generatePinCode() {
+  return String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+}
+
+function getKnockoutSourceLabel(type, matchId) {
+  if (!type || !matchId) return "Pendiente de definición";
+  return `${type === "loser" ? "Perdedor" : "Ganador"} Partido ${matchId}`;
+}
+
+function resolveKnockoutTeam(match, side, resultsByMatch = knockoutResultsCache) {
+  const directTeam = match[`team${side}`];
+  if (directTeam) return { name: directTeam, pending: false, label: getTeamLabel(directTeam) };
+
+  const sourceType = match[`source${side}Type`];
+  const sourceMatchId = match[`source${side}MatchId`];
+  const sourceResult = resultsByMatch.get(sourceMatchId);
+  if (sourceResult?.is_locked) {
+    const name = sourceType === "loser" ? sourceResult.loser_team : sourceResult.winner_team;
+    return { name, pending: false, label: getTeamLabel(name) };
+  }
+  return { name: "", pending: true, label: "Pendiente de definición", sourceLabel: getKnockoutSourceLabel(sourceType, sourceMatchId) };
+}
+
+function getResolvedKnockoutMatch(match, resultsByMatch = knockoutResultsCache) {
+  const side1 = resolveKnockoutTeam(match, 1, resultsByMatch);
+  const side2 = resolveKnockoutTeam(match, 2, resultsByMatch);
+  return { ...match, resolvedTeam1: side1.name, resolvedTeam2: side2.name, team1Pending: side1.pending, team2Pending: side2.pending, team1Label: side1.label, team2Label: side2.label, source1Label: side1.sourceLabel, source2Label: side2.sourceLabel, isAvailable: !side1.pending && !side2.pending };
+}
+
+function getKnockoutWinner(goals1, goals2, team1, team2, selectedWinner = "") {
+  if (goals1 > goals2) return team1;
+  if (goals2 > goals1) return team2;
+  return selectedWinner;
+}
+
+function scoreKnockoutPrediction(prediction, result) {
+  if (!result) return { points: 0, exact: 0, sign: 0 };
+  if (prediction.goals1 === result.goals1 && prediction.goals2 === result.goals2 && prediction.predicted_winner === result.winner_team) {
+    return { points: 3, exact: 1, sign: 1 };
+  }
+  if (prediction.predicted_winner === result.winner_team) {
+    return { points: 1, exact: 0, sign: 1 };
+  }
+  return { points: 0, exact: 0, sign: 0 };
+}
+
+async function safeSelect(table, columns) {
+  const { data, error } = await supabaseClient.from(table).select(columns);
+  if (error) {
+    if (error.code === "42P01" || /does not exist/i.test(error.message || "")) return [];
+    throw error;
+  }
+  return data || [];
+}
+
+async function loadKnockoutResultsMap() {
+  const rows = await safeSelect("knockout_results", "match_id, goals1, goals2, winner_team, loser_team, is_locked");
+  knockoutResultsCache = new Map(rows.map(result => [result.match_id, result]));
+  return knockoutResultsCache;
+}
+
+async function loadKnockoutStatusMap() {
+  const rows = await safeSelect("knockout_match_status", "match_id, is_started");
+  knockoutStatusCache = new Map(rows.map(status => [status.match_id, status]));
+  return knockoutStatusCache;
+}
+
+function isKnockoutStarted(matchId, statusByMatch = knockoutStatusCache) {
+  return statusByMatch.get(matchId)?.is_started === true;
+}
+
+async function authenticateKnockoutParticipant() {
+  const fullNameInput = document.getElementById("knockoutFullName");
+  const pinInput = document.getElementById("knockoutPin");
+  const fullName = normalizeName(fullNameInput.value);
+  const pin = normalizePin(pinInput.value);
+  fullNameInput.value = fullName;
+
+  if (!fullName || !/^\d{4}$/.test(pin)) {
+    showMessage("Ingresá Nombre y Apellido y un PIN de 4 dígitos.", "error");
+    return;
+  }
+
+  try {
+    assertSupabaseConfig();
+    const { data, error } = await supabaseClient
+      .from("participants")
+      .select("id, full_name, pin_code")
+      .ilike("full_name", fullName)
+      .eq("pin_code", pin)
+      .limit(1);
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      showMessage("Nombre/PIN incorrecto.", "error");
+      return;
+    }
+    knockoutParticipant = data[0];
+    document.getElementById("knockoutParticipantName").textContent = `Eliminatorias de ${knockoutParticipant.full_name}`;
+    document.getElementById("knockoutLogin").classList.add("hidden");
+    document.getElementById("knockoutPanel").classList.remove("hidden");
+    await loadKnockoutPageData();
+    showMessage("Acceso habilitado.", "success");
+  } catch (error) {
+    showMessage(error.message || "No se pudo validar el participante.", "error");
+  }
+}
+
+async function loadKnockoutPageData() {
+  assertSupabaseConfig();
+  const [resultsByMatch, statusByMatch, predictions] = await Promise.all([
+    loadKnockoutResultsMap(),
+    loadKnockoutStatusMap(),
+    safeSelect("knockout_predictions", "match_id, goals1, goals2, predicted_winner, participant_id")
+  ]);
+  const participantPredictions = new Map(predictions.filter(prediction => prediction.participant_id === knockoutParticipant.id).map(prediction => [prediction.match_id, prediction]));
+  renderKnockoutForm(resultsByMatch, participantPredictions, statusByMatch);
+}
+
+function renderKnockoutForm(resultsByMatch, predictionsByMatch = new Map(), statusByMatch = knockoutStatusCache) {
+  const container = document.getElementById("knockoutMatchesContainer");
+  if (!container) return;
+  const groups = groupKnockoutMatches();
+  container.innerHTML = Object.entries(groups).map(([phase, matches]) => `
+    <section class="group-card knockout-phase-card">
+      <h2>${phase}</h2>
+      <div class="match-list">
+        ${matches.map(match => renderKnockoutPredictionRow(getResolvedKnockoutMatch(match, resultsByMatch), predictionsByMatch.get(match.id), resultsByMatch.get(match.id), statusByMatch.get(match.id))).join("")}
+      </div>
+    </section>
+  `).join("");
+}
+
+function renderKnockoutPredictionRow(match, prediction, result, status) {
+  const isLocked = result?.is_locked === true;
+  const isStarted = status?.is_started === true;
+  const disabled = !match.isAvailable || isLocked || isStarted;
+  const pendingText = !match.isAvailable ? `<small class="pending-note">${match.source1Label || ""} ${match.source2Label || ""}</small>` : "";
+  const winnerOptions = match.isAvailable ? [match.resolvedTeam1, match.resolvedTeam2].map(team => `<option value="${team}" ${prediction?.predicted_winner === team ? "selected" : ""}>${getTeamLabel(team)}</option>`).join("") : "";
+  const needsWinner = prediction && prediction.goals1 === prediction.goals2;
+  return `
+    <article class="match-row knockout-row ${disabled ? "closed-match" : ""}" data-knockout-match-id="${match.id}" data-team1="${match.resolvedTeam1}" data-team2="${match.resolvedTeam2}">
+      <div class="match-number">#${match.id}</div>
+      <div class="match-team left-team"><span class="team"><span>${match.isAvailable ? getTeamLabel(match.resolvedTeam1) : "Pendiente de definición"}</span></span>${pendingText}</div>
+      <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles ${match.resolvedTeam1 || "equipo 1"}" data-ko-goals="1" data-match-id="${match.id}" value="${prediction?.goals1 ?? ""}" ${disabled ? "disabled" : ""}>
+      <span class="versus">vs</span>
+      <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" aria-label="Goles ${match.resolvedTeam2 || "equipo 2"}" data-ko-goals="2" data-match-id="${match.id}" value="${prediction?.goals2 ?? ""}" ${disabled ? "disabled" : ""}>
+      <div class="match-team right-team"><span class="team"><span>${match.isAvailable ? getTeamLabel(match.resolvedTeam2) : "Pendiente de definición"}</span></span></div>
+      <label class="winner-select ${needsWinner ? "" : "hidden"}">Equipo que avanza
+        <select data-ko-winner="true" data-match-id="${match.id}" ${disabled ? "disabled" : ""}>
+          <option value="">Seleccionar</option>
+          ${winnerOptions}
+        </select>
+      </label>
+      ${isLocked ? `<span class="closed-badge">Cerrado</span>` : isStarted ? `<span class="closed-badge started-badge">Pronóstico cerrado</span>` : ""}
+    </article>
+  `;
+}
+
+function updateKnockoutWinnerSelectors(scope = document) {
+  scope.querySelectorAll(".knockout-row").forEach(row => {
+    const goals1 = row.querySelector('[data-ko-goals="1"]')?.value;
+    const goals2 = row.querySelector('[data-ko-goals="2"]')?.value;
+    row.querySelector(".winner-select")?.classList.toggle("hidden", goals1 === "" || goals2 === "" || goals1 !== goals2);
+  });
+}
+
+function readKnockoutPredictions() {
+  const rows = [];
+  const errors = [];
+  document.querySelectorAll(".knockout-row").forEach(row => {
+    const matchId = Number(row.dataset.knockoutMatchId);
+    const input1 = row.querySelector('[data-ko-goals="1"]');
+    const input2 = row.querySelector('[data-ko-goals="2"]');
+    if (!input1 || !input2 || input1.disabled || input2.disabled) return;
+    input1.classList.remove("input-error");
+    input2.classList.remove("input-error");
+    const raw1 = input1.value;
+    const raw2 = input2.value;
+    if (raw1 === "" || raw2 === "") {
+      errors.push(`Falta completar el partido #${matchId}.`);
+      input1.classList.add("input-error");
+      input2.classList.add("input-error");
+      return;
+    }
+    const goals1 = Number(raw1);
+    const goals2 = Number(raw2);
+    if (!Number.isInteger(goals1) || !Number.isInteger(goals2) || goals1 < 0 || goals2 < 0) {
+      errors.push(`El partido #${matchId} tiene goles inválidos.`);
+      input1.classList.add("input-error");
+      input2.classList.add("input-error");
+      return;
+    }
+    const team1 = row.dataset.team1;
+    const team2 = row.dataset.team2;
+    const winnerSelect = row.querySelector('[data-ko-winner="true"]');
+    const predictedWinner = getKnockoutWinner(goals1, goals2, team1, team2, winnerSelect?.value || "");
+    if (!predictedWinner) {
+      errors.push(`Seleccioná el equipo que avanza en el partido #${matchId}.`);
+      winnerSelect?.classList.add("input-error");
+      return;
+    }
+    winnerSelect?.classList.remove("input-error");
+    rows.push({ participant_id: knockoutParticipant.id, match_id: matchId, goals1, goals2, predicted_winner: predictedWinner });
+  });
+  return { rows, errors };
+}
+
+async function saveKnockoutPredictions(event) {
+  event.preventDefault();
+  const { rows, errors } = readKnockoutPredictions();
+  const availableRows = [...document.querySelectorAll(".knockout-row")].filter(row => !row.querySelector('[data-ko-goals="1"]')?.disabled);
+  if (errors.length > 0 || rows.length !== availableRows.length) {
+    showMessage("No se puede guardar si falta completar algún partido disponible o hay goles inválidos.", "error");
+    return;
+  }
+  try {
+    assertSupabaseConfig();
+    if (rows.length === 0) {
+      showMessage("No hay partidos disponibles para guardar.", "error");
+      return;
+    }
+    const { error } = await supabaseClient.from("knockout_predictions").upsert(rows, { onConflict: "participant_id,match_id" });
+    if (error) throw error;
+    await loadKnockoutPageData();
+    showMessage("Pronósticos de eliminatorias guardados correctamente.", "success");
+  } catch (error) {
+    showMessage(error.message || "No se pudieron guardar las eliminatorias.", "error");
+  }
+}
+
+function initKnockoutPage() {
+  document.getElementById("knockoutLoginButton")?.addEventListener("click", authenticateKnockoutParticipant);
+  document.getElementById("refreshKnockout")?.addEventListener("click", loadKnockoutPageData);
+  document.getElementById("knockoutForm")?.addEventListener("input", event => {
+    if (event.target.matches('[data-ko-goals="1"], [data-ko-goals="2"]')) updateKnockoutWinnerSelectors(event.target.closest(".knockout-row"));
+  });
+  document.getElementById("knockoutForm")?.addEventListener("submit", saveKnockoutPredictions);
+}
+function switchAdminModule(moduleName) {
+  document.querySelectorAll(".admin-module-panel").forEach(panel => panel.classList.add("hidden"));
+  const panelIds = { groups: "groupResultsModule", knockout: "knockoutResultsModule", pins: "pinsModule" };
+  document.getElementById(panelIds[moduleName])?.classList.remove("hidden");
+  document.querySelectorAll("[data-admin-module]").forEach(tab => {
+    const active = tab.dataset.adminModule === moduleName;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", String(active));
+  });
+}
+
+async function loadPinsAdmin() {
+  const container = document.getElementById("pinsContainer");
+  if (!container) return;
+  container.innerHTML = `<div class="empty-admin-state">Cargando participantes...</div>`;
+  const { data, error } = await supabaseClient.from("participants").select("id, full_name, pin_code").order("full_name", { ascending: true });
+  if (error) throw error;
+  const participants = data || [];
+  if (participants.length === 0) {
+    container.innerHTML = `<div class="empty-admin-state">Todavía no hay participantes registrados.</div>`;
+    return;
+  }
+  container.innerHTML = participants.map(participant => `
+    <article class="pin-card" data-participant-id="${participant.id}">
+      <div>
+        <strong>${participant.full_name}</strong>
+        <span>PIN: <b>${participant.pin_code || "Sin PIN"}</b></span>
+      </div>
+      <button type="button" class="secondary-button" data-generate-pin="${participant.id}">${participant.pin_code ? "Regenerar PIN" : "Generar PIN"}</button>
+    </article>
+  `).join("");
+  container.querySelectorAll("[data-generate-pin]").forEach(button => {
+    button.addEventListener("click", () => generateParticipantPin(button.dataset.generatePin));
+  });
+}
+
+async function generateParticipantPin(participantId) {
+  try {
+    assertSupabaseConfig();
+    const pinCode = generatePinCode();
+    const { error } = await supabaseClient.from("participants").update({ pin_code: pinCode }).eq("id", participantId);
+    if (error) throw error;
+    await loadPinsAdmin();
+    showMessage("PIN generado correctamente.", "success");
+  } catch (error) {
+    showMessage(error.message || "No se pudo generar el PIN.", "error");
+  }
+}
+
+function renderKnockoutAdminMatch(match, result, status) {
+  const resolved = getResolvedKnockoutMatch(match, knockoutResultsCache);
+  const isLocked = result?.is_locked === true;
+  const isStarted = status?.is_started === true;
+  const disabled = isLocked || !resolved.isAvailable;
+  const winnerOptions = resolved.isAvailable ? [resolved.resolvedTeam1, resolved.resolvedTeam2].map(team => `<option value="${team}" ${result?.winner_team === team ? "selected" : ""}>${getTeamLabel(team)}</option>`).join("") : "";
+  return `
+    <article class="admin-match knockout-admin-match ${isLocked ? "locked-result" : ""}" data-ko-admin-match-id="${match.id}" data-team1="${resolved.resolvedTeam1}" data-team2="${resolved.resolvedTeam2}">
+      <span class="admin-group">${match.phase} · #${match.id}</span>
+      ${isLocked ? `<span class="closed-badge admin-closed-badge">Cerrado</span>` : isStarted ? `<span class="closed-badge admin-closed-badge started-badge">Iniciado</span>` : ""}
+      <div class="admin-teams">
+        <span class="team"><span>${resolved.isAvailable ? getTeamLabel(resolved.resolvedTeam1) : "Pendiente de definición"}</span></span>
+        <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" data-ko-admin-goals="1" data-match-id="${match.id}" value="${result?.goals1 ?? ""}" ${disabled ? "disabled" : ""}>
+        <span class="versus">vs</span>
+        <input class="goal-input" type="number" min="0" step="1" inputmode="numeric" data-ko-admin-goals="2" data-match-id="${match.id}" value="${result?.goals2 ?? ""}" ${disabled ? "disabled" : ""}>
+        <span class="team"><span>${resolved.isAvailable ? getTeamLabel(resolved.resolvedTeam2) : "Pendiente de definición"}</span></span>
+      </div>
+      ${resolved.isAvailable ? `
+        <label class="winner-select ${result && result.goals1 === result.goals2 ? "" : "hidden"}">Ganador real
+          <select data-ko-admin-winner="true" data-match-id="${match.id}" ${disabled ? "disabled" : ""}>
+            <option value="">Seleccionar</option>
+            ${winnerOptions}
+          </select>
+        </label>
+        ${isLocked ? "" : `<div class="admin-inline-actions"><button type="button" class="secondary-button" data-start-ko-match="${match.id}" ${isStarted ? "disabled" : ""}>${isStarted ? "Partido iniciado" : "Marcar como iniciado"}</button><label class="lock-control"><input type="checkbox" data-ko-admin-lock="true" data-match-id="${match.id}"> Cerrar partido</label></div>`}
+      ` : `<p class="pending-note">${resolved.source1Label || ""} ${resolved.source2Label || ""}</p>`}
+    </article>
+  `;
+}
+
+async function loadKnockoutAdminResults() {
+  const container = document.getElementById("knockoutAdminContainer");
+  if (!container) return;
+  container.innerHTML = `<div class="empty-admin-state">Cargando eliminatorias...</div>`;
+  const [resultsByMatch, statusByMatch] = await Promise.all([loadKnockoutResultsMap(), loadKnockoutStatusMap()]);
+  const groups = groupKnockoutMatches();
+  container.innerHTML = Object.entries(groups).map(([phase, matches]) => `
+    <section class="group-card knockout-phase-card">
+      <h2>${phase}</h2>
+      <div class="match-list">
+        ${matches.map(match => renderKnockoutAdminMatch(match, resultsByMatch.get(match.id), statusByMatch.get(match.id))).join("")}
+      </div>
+    </section>
+  `).join("");
+}
+
+async function markKnockoutMatchStarted(matchId) {
+  try {
+    assertSupabaseConfig();
+    const { error } = await supabaseClient
+      .from("knockout_match_status")
+      .upsert({ match_id: Number(matchId), is_started: true, updated_at: new Date().toISOString() }, { onConflict: "match_id" });
+    if (error) throw error;
+    await loadKnockoutAdminResults();
+    showMessage("Partido marcado como iniciado. Los pronósticos quedaron cerrados.", "success");
+  } catch (error) {
+    showMessage(error.message || "No se pudo marcar el partido como iniciado.", "error");
+  }
+}
+
+function updateKnockoutAdminWinnerSelectors(scope = document) {
+  scope.querySelectorAll(".knockout-admin-match").forEach(row => {
+    const goals1 = row.querySelector('[data-ko-admin-goals="1"]')?.value;
+    const goals2 = row.querySelector('[data-ko-admin-goals="2"]')?.value;
+    row.querySelector(".winner-select")?.classList.toggle("hidden", goals1 === "" || goals2 === "" || goals1 !== goals2);
+  });
+}
+
+function readKnockoutAdminResults() {
+  const rows = [];
+  document.querySelectorAll(".knockout-admin-match").forEach(row => {
+    const matchId = Number(row.dataset.koAdminMatchId);
+    const input1 = row.querySelector('[data-ko-admin-goals="1"]');
+    const input2 = row.querySelector('[data-ko-admin-goals="2"]');
+    const lockInput = row.querySelector('[data-ko-admin-lock="true"]');
+    if (!input1 || !input2 || input1.disabled || input2.disabled || !lockInput) return;
+    const raw1 = input1.value;
+    const raw2 = input2.value;
+    input1.classList.remove("input-error");
+    input2.classList.remove("input-error");
+    if (raw1 === "" && raw2 === "" && !lockInput.checked) return;
+    if (raw1 === "" || raw2 === "") {
+      input1.classList.add("input-error");
+      input2.classList.add("input-error");
+      throw new Error(`Completá ambos goles del partido #${matchId} o dejá ambos vacíos.`);
+    }
+    const goals1 = Number(raw1);
+    const goals2 = Number(raw2);
+    if (!Number.isInteger(goals1) || !Number.isInteger(goals2) || goals1 < 0 || goals2 < 0) throw new Error(`El partido #${matchId} tiene goles inválidos.`);
+    const team1 = row.dataset.team1;
+    const team2 = row.dataset.team2;
+    const winnerSelect = row.querySelector('[data-ko-admin-winner="true"]');
+    const winner = getKnockoutWinner(goals1, goals2, team1, team2, winnerSelect?.value || "");
+    if (!winner) throw new Error(`Seleccioná el ganador real del partido #${matchId}.`);
+    const loser = winner === team1 ? team2 : team1;
+    rows.push({ match_id: matchId, goals1, goals2, winner_team: winner, loser_team: loser, is_locked: lockInput.checked, updated_at: new Date().toISOString() });
+  });
+  return rows;
+}
+
+async function saveKnockoutAdminResults(event) {
+  event.preventDefault();
+  try {
+    assertSupabaseConfig();
+    const rows = readKnockoutAdminResults();
+    if (rows.length === 0) {
+      showMessage("No hay resultados de eliminatorias para guardar.", "error");
+      return;
+    }
+    const { error } = await supabaseClient.from("knockout_results").upsert(rows, { onConflict: "match_id" });
+    if (error) throw error;
+    await loadKnockoutAdminResults();
+    showMessage("Resultados de eliminatorias guardados correctamente.", "success");
+  } catch (error) {
+    showMessage(error.message || "No se pudieron guardar las eliminatorias.", "error");
+  }
+}
 
 if (page === "index") initIndexPage();
+if (page === "knockout") initKnockoutPage();
 if (page === "ranking") {
-  document.getElementById("refreshRanking").addEventListener("click", loadRanking);
+  document.getElementById("refreshRanking").addEventListener("click", () => loadRanking(currentRankingMode));
+  document.querySelectorAll("[data-ranking-mode]").forEach(tab => {
+    tab.addEventListener("click", () => {
+      currentRankingMode = tab.dataset.rankingMode;
+      document.querySelectorAll("[data-ranking-mode]").forEach(item => {
+        const active = item.dataset.rankingMode === currentRankingMode;
+        item.classList.toggle("active", active);
+        item.setAttribute("aria-selected", String(active));
+      });
+      closeRankingDetail();
+      loadRanking(currentRankingMode);
+    });
+  });
   document.getElementById("closeDetailButton")?.addEventListener("click", closeRankingDetail);
   document.getElementById("rankingDetailModal")?.addEventListener("click", event => {
     if (event.target.id === "rankingDetailModal") closeRankingDetail();
   });
-  loadRanking();
+  loadRanking("groups");
 }
 if (page === "admin") initAdminPage();

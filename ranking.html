@@ -10,20 +10,25 @@
   <header class="hero compact-hero">
     <nav class="top-nav" aria-label="Navegación principal">
       <a class="nav-link" href="index.html">Cargar prode</a>
+      <a class="nav-link" href="knockout.html">Eliminatorias</a>
       <a class="nav-link active" href="ranking.html">Ver ranking</a>
     </nav>
     <div class="hero-content">
       <p class="eyebrow">Tabla general</p>
       <h1>Ranking Prode 2026</h1>
-      <p>El puntaje se recalcula con las predicciones y los resultados oficiales cargados.</p>
+      <p>Consultá por separado el histórico de fase de grupos y el ranking vivo de eliminatorias.</p>
     </div>
   </header>
 
   <main class="container">
     <section class="card">
       <div class="section-heading">
-        <h2>Posiciones</h2>
+        <h2 id="rankingTitle">Ranking fase de grupos</h2>
         <button id="refreshRanking" type="button" class="secondary-button">Actualizar</button>
+      </div>
+      <div class="ranking-tabs" role="tablist" aria-label="Tipo de ranking">
+        <button type="button" class="ranking-tab active" data-ranking-mode="groups" role="tab" aria-selected="true">Ranking fase de grupos</button>
+        <button type="button" class="ranking-tab" data-ranking-mode="knockout" role="tab" aria-selected="false">Ranking eliminatorias</button>
       </div>
       <div id="rankingNotice" class="notice"></div>
       <div id="podium" class="podium" aria-live="polite"></div>
@@ -35,7 +40,7 @@
               <th>Nombre y Apellido</th>
               <th>Puntos</th>
               <th>Exactos</th>
-              <th>Signos acertados</th>
+              <th id="rankingSignHeader">Signos acertados</th>
               <th>Total de aciertos</th>
               <th>Detalle</th>
             </tr>

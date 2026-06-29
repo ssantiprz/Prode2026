@@ -142,3 +142,46 @@ function groupMatches(matches = MATCHES) {
     return groups;
   }, {});
 }
+
+const KNOCKOUT_MATCHES = [
+  { id: 73, phase: "Dieciseisavos", team1: "Sudáfrica", team2: "Canadá", sortOrder: 73 },
+  { id: 74, phase: "Dieciseisavos", team1: "Alemania", team2: "Paraguay", sortOrder: 74 },
+  { id: 75, phase: "Dieciseisavos", team1: "Países Bajos", team2: "Marruecos", sortOrder: 75 },
+  { id: 76, phase: "Dieciseisavos", team1: "Brasil", team2: "Japón", sortOrder: 76 },
+  { id: 77, phase: "Dieciseisavos", team1: "Francia", team2: "Suecia", sortOrder: 77 },
+  { id: 78, phase: "Dieciseisavos", team1: "Costa de Marfil", team2: "Noruega", sortOrder: 78 },
+  { id: 79, phase: "Dieciseisavos", team1: "México", team2: "Ecuador", sortOrder: 79 },
+  { id: 80, phase: "Dieciseisavos", team1: "Inglaterra", team2: "República Democrática del Congo", sortOrder: 80 },
+  { id: 81, phase: "Dieciseisavos", team1: "Estados Unidos", team2: "Bosnia y Herzegovina", sortOrder: 81 },
+  { id: 82, phase: "Dieciseisavos", team1: "Bélgica", team2: "Senegal", sortOrder: 82 },
+  { id: 83, phase: "Dieciseisavos", team1: "Portugal", team2: "Croacia", sortOrder: 83 },
+  { id: 84, phase: "Dieciseisavos", team1: "España", team2: "Austria", sortOrder: 84 },
+  { id: 85, phase: "Dieciseisavos", team1: "Suiza", team2: "Argelia", sortOrder: 85 },
+  { id: 86, phase: "Dieciseisavos", team1: "Argentina", team2: "Cabo Verde", sortOrder: 86 },
+  { id: 87, phase: "Dieciseisavos", team1: "Colombia", team2: "Ghana", sortOrder: 87 },
+  { id: 88, phase: "Dieciseisavos", team1: "Australia", team2: "Egipto", sortOrder: 88 },
+  { id: 89, phase: "Octavos", source1Type: "winner", source1MatchId: 74, source2Type: "winner", source2MatchId: 77, sortOrder: 89 },
+  { id: 90, phase: "Octavos", team1: "Canadá", source2Type: "winner", source2MatchId: 75, sortOrder: 90 },
+  { id: 91, phase: "Octavos", source1Type: "winner", source1MatchId: 76, source2Type: "winner", source2MatchId: 78, sortOrder: 91 },
+  { id: 92, phase: "Octavos", source1Type: "winner", source1MatchId: 79, source2Type: "winner", source2MatchId: 80, sortOrder: 92 },
+  { id: 93, phase: "Octavos", source1Type: "winner", source1MatchId: 83, source2Type: "winner", source2MatchId: 84, sortOrder: 93 },
+  { id: 94, phase: "Octavos", source1Type: "winner", source1MatchId: 81, source2Type: "winner", source2MatchId: 82, sortOrder: 94 },
+  { id: 95, phase: "Octavos", source1Type: "winner", source1MatchId: 86, source2Type: "winner", source2MatchId: 88, sortOrder: 95 },
+  { id: 96, phase: "Octavos", source1Type: "winner", source1MatchId: 85, source2Type: "winner", source2MatchId: 87, sortOrder: 96 },
+  { id: 97, phase: "Cuartos", source1Type: "winner", source1MatchId: 89, source2Type: "winner", source2MatchId: 90, sortOrder: 97 },
+  { id: 98, phase: "Cuartos", source1Type: "winner", source1MatchId: 93, source2Type: "winner", source2MatchId: 94, sortOrder: 98 },
+  { id: 99, phase: "Cuartos", source1Type: "winner", source1MatchId: 91, source2Type: "winner", source2MatchId: 92, sortOrder: 99 },
+  { id: 100, phase: "Cuartos", source1Type: "winner", source1MatchId: 95, source2Type: "winner", source2MatchId: 96, sortOrder: 100 },
+  { id: 101, phase: "Semifinales", source1Type: "winner", source1MatchId: 97, source2Type: "winner", source2MatchId: 98, sortOrder: 101 },
+  { id: 102, phase: "Semifinales", source1Type: "winner", source1MatchId: 99, source2Type: "winner", source2MatchId: 100, sortOrder: 102 },
+  { id: 103, phase: "Tercer puesto", source1Type: "loser", source1MatchId: 101, source2Type: "loser", source2MatchId: 102, sortOrder: 103 },
+  { id: 104, phase: "Final", source1Type: "winner", source1MatchId: 101, source2Type: "winner", source2MatchId: 102, sortOrder: 104 }
+];
+
+function groupKnockoutMatches(matches = KNOCKOUT_MATCHES) {
+  return matches.reduce((groups, match) => {
+    if (!groups[match.phase]) groups[match.phase] = [];
+    groups[match.phase].push(match);
+    return groups;
+  }, {});
+}
