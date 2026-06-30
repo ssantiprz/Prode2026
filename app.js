@@ -1153,8 +1153,8 @@ function renderKnockoutAdminMatch(match, result, status) {
         <span class="team"><span>${resolved.isAvailable ? getTeamLabel(resolved.resolvedTeam2) : "Pendiente de definición"}</span></span>
       </div>
       ${resolved.isAvailable ? `
-        <label class="winner-select ${result && result.goals1 === result.goals2 ? "" : "hidden"}">Ganador real
-          <select data-ko-admin-winner="true" data-match-id="${match.id}" ${disabled ? "disabled" : ""}>
+        <label class="winner-select ${result && result.goals1 === result.goals2 ? "" : "hidden"}">Equipo que avanza
+          <select data-ko-admin-winner="true" data-match-id="${match.id}" aria-label="Equipo que avanza en partido ${match.id}" ${disabled ? "disabled" : ""}>
             <option value="">Seleccionar</option>
             ${winnerOptions}
           </select>
@@ -1197,9 +1197,12 @@ async function markKnockoutMatchStarted(matchId) {
 
 function updateKnockoutAdminWinnerSelectors(scope = document) {
   scope.querySelectorAll(".knockout-admin-match").forEach(row => {
-    const goals1 = row.querySelector('[data-ko-admin-goals="1"]')?.value;
-    const goals2 = row.querySelector('[data-ko-admin-goals="2"]')?.value;
-    row.querySelector(".winner-select")?.classList.toggle("hidden", goals1 === "" || goals2 === "" || goals1 !== goals2);
+    const rawGoals1 = row.querySelector('[data-ko-admin-goals="1"]')?.value;
+    const rawGoals2 = row.querySelector('[data-ko-admin-goals="2"]')?.value;
+    const goals1 = Number(rawGoals1);
+    const goals2 = Number(rawGoals2);
+    const shouldShowWinner = rawGoals1 !== "" && rawGoals2 !== "" && Number.isInteger(goals1) && Number.isInteger(goals2) && goals1 === goals2;
+    row.querySelector(".winner-select")?.classList.toggle("hidden", !shouldShowWinner);
   });
 }
 
@@ -1227,8 +1230,20 @@ function readKnockoutAdminResults() {
     const team1 = row.dataset.team1;
     const team2 = row.dataset.team2;
     const winnerSelect = row.querySelector('[data-ko-admin-winner="true"]');
-    const winner = getKnockoutWinner(goals1, goals2, team1, team2, winnerSelect?.value || "");
-    if (!winner) throw new Error(`Seleccioná el ganador real del partido #${matchId}.`);
+    winnerSelect?.classList.remove("input-error");
+
+    let winner;
+    if (goals1 === goals2) {
+      row.querySelector(".winner-select")?.classList.remove("hidden");
+      winner = winnerSelect?.value || "";
+      if (!winner) {
+        winnerSelect?.classList.add("input-error");
+        throw new Error(`Seleccioná quién avanza en el partido #${matchId}.`);
+      }
+    } else {
+      winner = goals1 > goals2 ? team1 : team2;
+    }
+
     const loser = winner === team1 ? team2 : team1;
     rows.push({ match_id: matchId, goals1, goals2, winner_team: winner, loser_team: loser, is_locked: lockInput.checked, updated_at: new Date().toISOString() });
   });
