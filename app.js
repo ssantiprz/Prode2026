@@ -1006,11 +1006,20 @@ function renderKnockoutPredictionRow(match, prediction, result, status) {
   `;
 }
 
+function getRowsForScope(scope, selector) {
+  if (!scope) return [];
+  if (scope !== document && scope.matches?.(selector)) return [scope];
+  return [...scope.querySelectorAll(selector)];
+}
+
 function updateKnockoutWinnerSelectors(scope = document) {
-  scope.querySelectorAll(".knockout-row").forEach(row => {
-    const goals1 = row.querySelector('[data-ko-goals="1"]')?.value;
-    const goals2 = row.querySelector('[data-ko-goals="2"]')?.value;
-    row.querySelector(".winner-select")?.classList.toggle("hidden", goals1 === "" || goals2 === "" || goals1 !== goals2);
+  getRowsForScope(scope, ".knockout-row").forEach(row => {
+    const rawGoals1 = row.querySelector('[data-ko-goals="1"]')?.value;
+    const rawGoals2 = row.querySelector('[data-ko-goals="2"]')?.value;
+    const goals1 = Number(rawGoals1);
+    const goals2 = Number(rawGoals2);
+    const shouldShowWinner = rawGoals1 !== "" && rawGoals2 !== "" && Number.isInteger(goals1) && Number.isInteger(goals2) && goals1 === goals2;
+    row.querySelector(".winner-select")?.classList.toggle("hidden", !shouldShowWinner);
   });
 }
 
@@ -1196,7 +1205,7 @@ async function markKnockoutMatchStarted(matchId) {
 }
 
 function updateKnockoutAdminWinnerSelectors(scope = document) {
-  scope.querySelectorAll(".knockout-admin-match").forEach(row => {
+  getRowsForScope(scope, ".knockout-admin-match").forEach(row => {
     const rawGoals1 = row.querySelector('[data-ko-admin-goals="1"]')?.value;
     const rawGoals2 = row.querySelector('[data-ko-admin-goals="2"]')?.value;
     const goals1 = Number(rawGoals1);
